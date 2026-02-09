@@ -1,5 +1,5 @@
 {
-  "name": "cryptlet",
+  "name": "cipherkit",
   "version": "0.0.1",
   "module": "dist/index.js",
   "types": "dist/index.d.ts",

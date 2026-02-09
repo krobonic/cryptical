@@ -1,4 +1,4 @@
-# Crypto Library
+# CypherKit
 
 A lightweight, TypeScript-first cryptography library built on top of the Web Crypto API. This library provides high-level abstractions for common cryptographic operations including symmetric encryption, asymmetric encryption, and key management.
 
