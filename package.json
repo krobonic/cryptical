@@ -1,0 +1,26 @@
+{
+  "name": "cryptlet",
+  "version": "0.0.1",
+  "module": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "import": "./dist/index.js",
+      "types": "./dist/index.d.ts"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "test": "bun test",
+    "build": "rm -rf dist && bun build ./src/index.ts --outdir ./dist --target node && tsc"
+  },
+  "devDependencies": {
+    "@types/bun": "^1.3.8"
+  },
+  "peerDependencies": {
+    "typescript": "^5.9.3"
+  },
+  "type": "module"
+}
