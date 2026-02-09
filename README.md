@@ -2,6 +2,9 @@
 
 A lightweight, TypeScript-first cryptography library built on top of the Web Crypto API. This library provides high-level abstractions for common cryptographic operations including symmetric encryption, asymmetric encryption, and key management.
 
+> [!WARNING]
+> Very early development. The API is highly unstable and may change at any time. Features may be added or dropped at any time.
+
 ## Features
 
 - **Symmetric Encryption**: Easy-to-use AES-GCM encryption via `DataKey`.
@@ -12,10 +15,8 @@ A lightweight, TypeScript-first cryptography library built on top of the Web Cry
 
 ## Installation
 
-This project uses [Bun](https://bun.sh/). To install dependencies:
-
 ```bash
-bun install
+npm install cypherkit
 ```
 
 ## Usage
@@ -25,7 +26,7 @@ bun install
 Use `DataKey` for standard AES-GCM encryption and decryption.
 
 ```typescript
-import { Symmetric, Text } from './src';
+import { Symmetric, Text } from 'cipherkit';
 
 // Generate a new 256-bit AES-GCM key
 const dataKey = await Symmetric.DataKey.generate();
@@ -46,7 +47,7 @@ console.log(decryptedMessage); // "Hello, World!"
 Derive a `DataKey` or `WrappingKey` from a user-provided password using PBKDF2.
 
 ```typescript
-import { Symmetric } from './src';
+import { Symmetric } from 'cipherkit';
 
 const password = "my-secure-password";
 const passwordKey = await Symmetric.PasswordKey.import(password);
@@ -63,7 +64,7 @@ const derivedAgain = await passwordKey.deriveDataKey(salt);
 Securely wrap keys for storage or transmission using `WrappingKey` (AES-KW).
 
 ```typescript
-import { Symmetric } from './src';
+import { Symmetric } from 'cipherkit';
 
 const wrappingKey = await Symmetric.WrappingKey.generate();
 const dataKey = await Symmetric.DataKey.generate();
@@ -80,7 +81,7 @@ const unwrappedDataKey = await wrappingKey.unwrapDataKey(wrappedKeyBytes);
 Use `KeyPair` for RSA-OAEP asymmetric encryption.
 
 ```typescript
-import { Asymmetric, Text } from './src';
+import { Asymmetric, Text } from 'cipherkit';
 
 // Generate a 4096-bit RSA-OAEP key pair
 const keyPair = await Asymmetric.KeyPair.generate();
@@ -99,7 +100,7 @@ console.log(Text.decode(decrypted)); // "Top secret content"
 The `Text` class provides simple wrappers for `TextEncoder` and `TextDecoder`.
 
 ```typescript
-import { Text } from './src';
+import { Text } from 'cipherkit';
 
 const bytes = Text.encode("Hello");
 const str = Text.decode(bytes);
