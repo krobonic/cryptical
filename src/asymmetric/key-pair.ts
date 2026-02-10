@@ -1,8 +1,13 @@
 import { asU8 } from '../helpers.ts';
+import { BinaryLike } from '../types';
 
 interface AsymmetricKeyPair {
   publicKey: CryptoKey;
   privateKey?: CryptoKey;
+}
+interface RawAsymmetricKeyPair {
+  publicKey: Uint8Array;
+  privateKey?: Uint8Array;
 }
 
 export class KeyPair {
@@ -24,15 +29,22 @@ export class KeyPair {
           hash: 'SHA-256',
         },
         true,
-        ['encrypt', 'decrypt'],
+        ['encrypt', 'decrypt', 'wrapKey', 'unwrapKey'],
       ),
     );
   };
 
-  public export = async (): Promise<{ publicKey: Uint8Array, privateKey?: Uint8Array }> => {
+  public static import = async (publicKey: BinaryLike, privateKey?: BinaryLike): Promise<KeyPair> => {
+    return new KeyPair({
+      publicKey: await crypto.subtle.importKey('spki', publicKey, { name: 'RSA-OAEP', hash: 'SHA-256' }, true, ['encrypt', 'decrypt']),
+      privateKey: privateKey ? await crypto.subtle.importKey('pkcs8', privateKey, { name: 'RSA-OAEP', hash: 'SHA-256' }, true, ['decrypt']) : undefined,
+    });
+  }
+
+  public export = async (): Promise<RawAsymmetricKeyPair> => {
     return {
-      publicKey: new Uint8Array(await crypto.subtle.exportKey('raw', this.publicKey)),
-      privateKey: this.privateKey ? new Uint8Array(await crypto.subtle.exportKey('raw', this.privateKey)) : undefined,
+      publicKey: new Uint8Array(await crypto.subtle.exportKey('spki', this.publicKey)),
+      privateKey: this.privateKey ? new Uint8Array(await crypto.subtle.exportKey('pkcs8', this.privateKey)) : undefined,
     };
   };
 
