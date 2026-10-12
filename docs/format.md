@@ -26,13 +26,13 @@ Limits, checked before key derivation where applicable:
 | Serialized JWK / protected JWK plaintext | 32 KiB |
 | Password | 1–1024 UTF-8 bytes |
 
-JWK imports accept AES-256 (`oct`), RSA 3072/4096 bits with exponent 65537 and full two-prime private parameters, or Ed25519 (`OKP`). RSA integers use canonical unsigned big-endian encodings. Supplied `alg`, `use`, `key_ops`, and `ext` must match the purpose. `key_ops`, if supplied, must exactly match encrypt/decrypt for symmetric keys, encrypt or decrypt for RSA, or sign or verify for Ed25519. Imports are extractable; an explicit `ext: false` is rejected. Ed25519 imports accept compatible `EdDSA` or `Ed25519` algorithm metadata; exports normalize to `EdDSA` and pass only validated material to native import. Public exports have no private fields. Protected JWKs are JSON UTF-8 inside password JWE; no proprietary outer wrapper exists.
+JWK imports accept AES-256 (`oct`), RSA 3072/4096 bits with exponent 65537 and full two-prime private parameters, or Ed25519 (`OKP`). RSA integers use canonical unsigned big-endian encodings. Supplied `alg`, `use`, `key_ops`, and `ext` must match the purpose. `key_ops`, if supplied, must exactly match encrypt/decrypt for symmetric keys, encrypt or decrypt for RSA, or sign or verify for Ed25519. Imports are extractable; an explicit `ext: false` is rejected. Ed25519 imports accept compatible `EdDSA` or `Ed25519` algorithm metadata; exports normalize to `EdDSA` and pass only validated material to native import. Public exports have no private fields. Protected JWKs are JSON UTF-8 inside password or recipient JWE. Recipient wrapping uses `alg: "RSA-OAEP-256"`, `enc: "A256GCM"`, and `cty: "jwk+json"`; the JWK itself is the encrypted payload. Direct symmetric envelopes do not accept `cty`. The 32 KiB protected-payload limit applies to both password and recipient wrapping. Recipient unwrapping requires an explicit expected key purpose and rejects public keys. The existing binary version 1 framing supports these envelopes without a format change.
 
 Detached Ed25519 signatures follow [RFC 8032](https://www.rfc-editor.org/rfc/rfc8032.html), exactly 64 raw bytes (`R || S`), or canonical unpadded base64url for text APIs. No JWS header or prehash is added. Text decoding is strict UTF-8, including preserved leading BOM; malformed decrypted UTF-8 fails text decryption while byte decryption remains available.
 
 ## Binary envelope, version 1
 
-Encryption and protected key exports return `EncryptedData`. `toBinary()` serializes the following custom format; `fromBinary()` parses it. All integers are unsigned, big-endian. Offsets are byte offsets.
+Encryption, recipient key wrapping, and protected key exports return `EncryptedData`. `toBinary()` serializes the following custom format; `fromBinary()` parses it. All integers are unsigned, big-endian. Offsets are byte offsets.
 
 | Offset | Length | Field |
 | --- | --- | --- |

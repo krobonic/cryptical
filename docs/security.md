@@ -34,6 +34,13 @@ Actual Chrome/Edge, Safari/iOS Safari, mobile benchmarks, and independent review
 - Bun 1.4.2, Node 22.14.0, Chromium 153.0.8010.12 and WebKit 26.6 passed all 16 available encryption/JWK/protected-backup producer/consumer combinations, exercising both binary and JWE serialization. Bun, Node and Chromium passed all nine available full API combinations.
 - The full runtime gate still fails: Firefox could not launch because its generated profile directory was inaccessible, including a retry with a different temporary directory. WebKit 26.6 still fails the previously recorded native Ed25519 vector. The harness now continues after a browser launch failure to collect results from other engines, then fails the full-support gate.
 
+## Recipient key wrapping verification, 2026-10-12
+
+- 30 core/security/interoperability/serialization tests passed, including all three wrapped key purposes, binary/JWE round trips, independent JOSE interchange, wrong-purpose and public-key rejection, nonextractable keys, tampering, payload separation, and malformed decrypted JWKs.
+- Source, test and declaration-consumer checks, build and package checks passed. Combined browser entry: 5,136 bytes minified/gzipped. The installed TypeScript compiler was invoked directly with Bun because of the previously recorded launcher issue.
+- The runtime harness now exchanges wrapped symmetric and RSA private keys in both serializations across all 16 available Bun/Node/Chromium/WebKit combinations. All nine Bun/Node/Chromium full API combinations also passed, including wrapped Ed25519 private keys.
+- The full runtime gate remains failing for the previously recorded Firefox profile launch error and WebKit native Ed25519 failure. Recipient wrapping does not authenticate the sender; restored keys remain extractable under the existing import policy.
+
 ## Runtime and release gates
 
 Target Node 22.13+ on supported release lines; CI runs Node 22, 24, and 26 (26 is additionally a smoke target). Browsers require HTTPS or localhost and native AES-GCM, AES-KW, PBKDF2/SHA-512, RSA-OAEP/SHA-256 and Ed25519. Unsupported native algorithms raise CryptoUnavailableError; no polyfill, WASM, algorithm substitution, network discovery, or handwritten cryptography is used.

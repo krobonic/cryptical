@@ -133,6 +133,39 @@ Both namespaces provide `exportKey(key)` and `exportKeyWithPassword(key, passwor
 
 Keys are branded native `CryptoKey` values with runtime checks. When importing a dynamically loaded asymmetric JWK, narrow the result with `key.type === 'public'` or `key.type === 'private'` before use.
 
+### Wrap a key for a recipient
+
+`asymmetric.wrapKey()` protects an extractable symmetric key, RSA encryption private key, or Ed25519 signing private key using the recipient's authenticated encryption public key. It returns `EncryptedData` for binary or JWE storage.
+
+```ts
+import { symmetric, asymmetric, EncryptedData } from 'cypherkit2';
+
+const key = await symmetric.generateKey();
+const recipient = await asymmetric.generateEncryptionKeyPair();
+const wrapped = await asymmetric.wrapKey(key, recipient.publicKey);
+const saved = wrapped.toBinary(); // Or wrapped.toJWE()
+
+const restored = await asymmetric.unwrapKey(
+  EncryptedData.fromBinary(saved),
+  recipient.privateKey,
+  { purpose: 'symmetric' },
+); // SymmetricKey
+```
+
+The required `purpose` determines both runtime validation and the TypeScript return type:
+
+| Purpose | Returned key |
+| --- | --- |
+| `symmetric` | `SymmetricKey` (AES-256-GCM) |
+| `encryption` | `EncryptionPrivateKey` (RSA-OAEP) |
+| `signing` | `SigningPrivateKey` (Ed25519) |
+
+Private keys use the same calls: pass the private key to `wrapKey()` and its purpose to `unwrapKey()`. Public keys use ordinary JWK export. Nonextractable keys cannot be wrapped. Restored keys are extractable, following the existing import policy.
+
+Wrapping encrypts a bounded JWK payload with RSA-OAEP-256/AES-256-GCM and an authenticated key-content marker. Ordinary `decrypt()` rejects these envelopes; `unwrapKey()` rejects ordinary data envelopes, password backups, incompatible key material, and mismatched purposes. An invalid purpose option raises `InvalidArgumentError`; invalid key arguments raise `InvalidKeyError`; wrong recipients, tampering, and incompatible wrapped payloads raise `DecryptionError`.
+
+Anyone with the recipient's public key can produce a wrapped key for them; wrapping does not authenticate the sender. Use the password-protected export/import methods above when protecting a key with a password.
+
 ## Byte APIs and encoding
 
 Use the text helpers for strings and the byte APIs for `Uint8Array` data:

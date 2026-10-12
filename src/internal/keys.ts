@@ -62,13 +62,12 @@ export async function exportJwk(key: CryptoKey, purpose: Purpose): Promise<JsonW
   if (purpose === 'signing') jwk.alg = 'EdDSA';
   return jwk;
 }
-export async function exportProtected(key: CryptoKey, password: string, purpose: Purpose): Promise<EncryptedData> {
+export async function exportProtectedBytes(key: CryptoKey, purpose: Purpose): Promise<Uint8Array<ArrayBuffer>> {
   checkKey(key, purpose);
   if (purpose !== 'symmetric' && key.type !== 'private') throw new InvalidKeyError('Protected export requires a private key');
-  return passwordSeal(utf8(JSON.stringify(await exportJwk(key, purpose)), MAX_JWK), password, 'jwk+json');
+  return utf8(JSON.stringify(await exportJwk(key, purpose)), MAX_JWK);
 }
-export async function importProtected(value: EncryptedData, password: string, purpose: Purpose): Promise<CryptoKey> {
-  const data = await passwordOpen(value, password, 'jwk+json');
+export async function importProtectedBytes(data: Uint8Array, purpose: Purpose): Promise<CryptoKey> {
   try {
     if (data.length > MAX_JWK) throw new DecryptionError();
     const key = await importJwk(JSON.parse(text(data)), purpose);
@@ -78,4 +77,11 @@ export async function importProtected(value: EncryptedData, password: string, pu
     if (error instanceof CryptoUnavailableError) throw error;
     throw new DecryptionError();
   }
+}
+
+export async function exportProtected(key: CryptoKey, password: string, purpose: Purpose): Promise<EncryptedData> {
+  return passwordSeal(await exportProtectedBytes(key, purpose), password, 'jwk+json');
+}
+export async function importProtected(value: EncryptedData, password: string, purpose: Purpose): Promise<CryptoKey> {
+  return importProtectedBytes(await passwordOpen(value, password, 'jwk+json'), purpose);
 }

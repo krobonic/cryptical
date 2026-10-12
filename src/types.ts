@@ -6,3 +6,8 @@ export type SigningPublicKey = CryptoKey & { readonly type: 'public'; readonly [
 export type SigningPrivateKey = CryptoKey & { readonly type: 'private'; readonly [purpose]: 'signing-private' };
 export interface EncryptionKeyPair { publicKey: EncryptionPublicKey; privateKey: EncryptionPrivateKey }
 export interface SigningKeyPair { publicKey: SigningPublicKey; privateKey: SigningPrivateKey }
+
+/** Key material supported by recipient wrapping. Public keys use ordinary JWK export. */
+export type WrappableKey = SymmetricKey | EncryptionPrivateKey | SigningPrivateKey;
+export type KeyPurpose = 'symmetric' | 'encryption' | 'signing';
+export type KeyForPurpose<P extends KeyPurpose> = P extends 'symmetric' ? SymmetricKey : P extends 'encryption' ? EncryptionPrivateKey : SigningPrivateKey;
