@@ -31,7 +31,14 @@ test.skipIf(process.env.CYPHERKIT_RUNTIME !== '1')('built JavaScript: every Bun/
     const encryptionArtifacts: EncryptionArtifact[] = [...artifacts];
     console.log(`Bun ${Bun.version}, Node ${await node({ action: 'version' })}`);
     for (const engine of [chromium, firefox, webkit]) {
-      const browser = await engine.launch(); browsers.push(browser);
+      let browser: Browser;
+      try { browser = await engine.launch(); }
+      catch (error) {
+        unsupported.push(`${engine.name()} launch failed: ${String(error)}`);
+        console.log(`${engine.name()}: launch failed; continuing remaining engines`);
+        continue;
+      }
+      browsers.push(browser);
       const page = await browser.newPage(); pages.push(page);
       await page.goto(`http://127.0.0.1:${server.port}/tests/runtime/index.html`);
       await page.waitForFunction(() => !!(window as unknown as { cases: unknown }).cases);

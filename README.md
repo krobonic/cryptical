@@ -1,8 +1,8 @@
 # cypherkit2
 
-A small TypeScript library for encryption and detached signatures using native Web Crypto. It ships ESM JavaScript and TypeScript declarations, has zero runtime dependencies, and uses portable JWK keys and standard compact JWE ciphertexts.
+A small TypeScript library for encryption and detached signatures using native Web Crypto. It ships ESM JavaScript and TypeScript declarations, has zero runtime dependencies, and uses portable JWK keys and encrypted payloads with binary and standard compact JWE serialization.
 
-All cryptographic functions are asynchronous.
+All cryptographic functions are asynchronous. Encrypted payload parsing and serialization are synchronous.
 
 > **Pre-release — not independently audited.** Production release requires an independent security review and completion of the runtime/device checks. See [security and release status](docs/security.md).
 
@@ -26,7 +26,7 @@ All cryptographic functions are asynchronous.
 | Encrypt for one recipient | `asymmetric.encryptText` | Ciphertext; the recipient keeps their private key |
 | Sign a message | `asymmetric.signText` | Exact message, detached signature, and authenticated public signing key |
 
-Encryption returns a JWE string. Save the **entire string** to decrypt later. There is no recovery without the correct key or password.
+Encryption returns an immutable `EncryptedData` object. Save its **entire binary envelope** with `.toBinary()` or its **entire JWE string** with `.toJWE()` to decrypt later. There is no recovery without the correct key or password.
 
 ## Usage
 
@@ -102,7 +102,7 @@ Signatures are detached: store or transmit the original message alongside its si
 
 ## Save and restore keys
 
-Ordinary exports return standard JWK objects. **Symmetric and private JWK exports contain unencrypted secrets.** Password-protected exports return encrypted JWE strings; protected asymmetric exports accept only private keys.
+Ordinary exports return standard JWK objects. **Symmetric and private JWK exports contain unencrypted secrets.** Password-protected exports return `EncryptedData` objects; protected asymmetric exports accept only private keys.
 
 This example exports a public encryption key and creates a protected backup of its private key:
 
@@ -114,7 +114,10 @@ const publicJwk = await asymmetric.exportKey(recipient.publicKey);
 const importedPublic = await asymmetric.importEncryptionKey(publicJwk);
 
 const backup = await asymmetric.exportKeyWithPassword(recipient.privateKey, password);
-const recoveredPrivate = await asymmetric.importEncryptionKeyWithPassword(backup, password);
+const savedBackup = backup.toJWE();
+const recoveredPrivate = await asymmetric.importEncryptionKeyWithPassword(
+  asymmetric.EncryptedData.fromJWE(savedBackup), password,
+);
 
 const encrypted = await asymmetric.encryptText('Recovered', importedPublic);
 console.log(await asymmetric.decryptText(encrypted, recoveredPrivate)); // Recovered
@@ -137,16 +140,46 @@ Use the text helpers for strings and the byte APIs for `Uint8Array` data:
 | Operation | Text API | Byte API |
 | --- | --- | --- |
 | Encrypt with a key, in either namespace | `encryptText(text, key)` | `encrypt(data, key)` |
-| Decrypt with a key, in either namespace | `decryptText(jwe, key)` | `decrypt(jwe, key)` |
+| Decrypt with a key, in either namespace | `decryptText(encrypted, key)` | `decrypt(encrypted, key)` |
 | Encrypt with a password, in `symmetric` | `encryptTextWithPassword(text, password)` | `encryptWithPassword(data, password)` |
-| Decrypt with a password, in `symmetric` | `decryptTextWithPassword(jwe, password)` | `decryptWithPassword(jwe, password)` |
+| Decrypt with a password, in `symmetric` | `decryptTextWithPassword(encrypted, password)` | `decryptWithPassword(encrypted, password)` |
 | Sign, in `asymmetric` | `signText(text, privateKey)` | `sign(data, privateKey)` |
 | Verify, in `asymmetric` | `verifyText(text, signature, publicKey)` | `verify(data, signature, publicKey)` |
 
-- Encryption always returns a JWE string. Text decryption returns a string; byte decryption returns `Uint8Array`.
+- Encryption always returns `EncryptedData`; decryption accepts that object. Parse stored data with `EncryptedData.fromBinary(bytes)` or `EncryptedData.fromJWE(string)` first. Text decryption returns a string; byte decryption returns `Uint8Array`.
 - Text signatures are unpadded base64url strings. Byte signatures are 64-byte Ed25519 signatures as `Uint8Array`. Verification returns a boolean.
 - Text helpers use exact UTF-8: no trimming or normalization, leading BOM preserved, and lone UTF-16 surrogates rejected.
 - Input byte views are copied before asynchronous work.
+
+### Serialization and object storage
+
+`EncryptedData` is available from the package root and both namespace subpaths. Its parsers validate the envelope structure and supported parameters; **only decryption authenticates it**. Conversion does not require keys or repeat encryption. Binary output uses a versioned Cipherkit format with raw ciphertext; JWE output uses standard base64url encoding and adds roughly 33% to ciphertext size. The exact authenticated protected header is preserved in both formats.
+
+```ts
+import { EncryptedData, symmetric } from 'cypherkit2';
+
+const encrypted = await symmetric.encrypt(imageBytes, key);
+const binary = encrypted.toBinary(); // Uint8Array
+const jwe = encrypted.toJWE();       // compact JWE string
+
+// uploadUrl and downloadUrl are authorised object-storage URLs.
+const upload = await fetch(uploadUrl, {
+  method: 'PUT',
+  headers: { 'Content-Type': 'application/octet-stream' },
+  body: binary,
+});
+if (!upload.ok) throw new Error('Upload failed');
+
+const download = await fetch(downloadUrl);
+if (!download.ok) throw new Error('Download failed');
+const restored = EncryptedData.fromBinary(new Uint8Array(await download.arrayBuffer()));
+const originalBytes = await symmetric.decrypt(restored, key);
+
+// For text storage instead:
+const fromJwe = EncryptedData.fromJWE(jwe);
+```
+
+Retain the decryption key securely. Image filenames and MIME types are not automatically included; retain them separately or package them with the plaintext before encryption. A stored encrypted object must be decrypted before it can be displayed as an image. Objects hold no plaintext or secret keys, expose no mutable internal bytes, and return a fresh byte array for each `toBinary()` call. Serialize explicitly before storage or transport; JSON serialization of the object is not an envelope format.
 
 ## Errors
 
@@ -184,7 +217,7 @@ Identical plaintexts produce different ciphertexts. There are no algorithm, IV, 
 
 - Plaintext and signing input are limited to **16 MiB** per operation.
 - Passwords must contain **1–1024 UTF-8 bytes**.
-- Operations are one-shot: data is copied, and base64 encoding expands storage. Streaming is not supported.
+- Operations are one-shot: data is copied; choosing JWE serialization adds base64 storage overhead. Streaming is not supported.
 - Authenticated encryption detects changes. The library supplies no secure-messaging protocol, replay prevention, or forward secrecy.
 
 See [wire format and migration examples](docs/format.md) for serialization and import rules, and [security responsibilities](docs/security.md#responsibilities-and-threat-model) for key storage, rotation, and application safeguards.

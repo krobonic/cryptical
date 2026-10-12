@@ -1,18 +1,19 @@
 import { expect, test, spyOn } from 'bun:test';
-import { symmetric as s, asymmetric as a, DecryptionError, InvalidArgumentError, InvalidKeyError, CryptoUnavailableError } from '../index';
+import { EncryptedData, symmetric as s, asymmetric as a, DecryptionError, InvalidArgumentError, InvalidKeyError, CryptoUnavailableError } from '../index';
 import { b64, utf8, unb64, text, MAX_BYTES } from '../src/internal/encoding';
 import type { SymmetricKey, EncryptionPublicKey, SigningPrivateKey } from '../src/types';
-function header(value: string, change: Record<string, unknown>): string {
-  const p = value.split('.'); p[0] = b64(utf8(JSON.stringify({ ...JSON.parse(text(unb64(p[0]!, 4096))), ...change }))); return p.join('.');
+async function parsed<T>(value: string, operation: (data: EncryptedData) => Promise<T>): Promise<T> { return operation(EncryptedData.fromJWE(value)); }
+function header(value: string | EncryptedData, change: Record<string, unknown>): string {
+  const p = (typeof value === 'string' ? value : value.toJWE()).split('.'); p[0] = b64(utf8(JSON.stringify({ ...JSON.parse(text(unb64(p[0]!, 4096))), ...change }))); return p.join('.');
 }
 test('wrong keys, all segments, unsupported and malformed envelopes fail uniformly', async () => {
   const key = await s.generateKey(), other = await s.generateKey(), sealed = await s.encryptText('secret', key);
   await expect(s.decryptText(sealed, other)).rejects.toBeInstanceOf(DecryptionError);
   for (let i = 0; i < 5; i++) {
-    const parts = sealed.split('.'); parts[i] = parts[i] ? (parts[i]![0] === 'A' ? 'B' : 'A') + parts[i]!.slice(1) : 'AA';
-    await expect(s.decrypt(parts.join('.'), key)).rejects.toBeInstanceOf(DecryptionError);
+    const parts = sealed.toJWE().split('.'); parts[i] = parts[i] ? (parts[i]![0] === 'A' ? 'B' : 'A') + parts[i]!.slice(1) : 'AA';
+    await expect(parsed(parts.join('.'), data => s.decrypt(data, key))).rejects.toBeInstanceOf(DecryptionError);
   }
-  for (const value of ['', '....', sealed + '=', header(sealed, { alg: 'none' }), header(sealed, { zip: 'DEF' }), header(sealed, { crit: [] }), header(sealed, { jwk: {} }), 'a'.repeat(24 * 1024 * 1024 + 1)]) await expect(s.decrypt(value, key)).rejects.toBeInstanceOf(DecryptionError);
+  for (const value of ['', '....', sealed.toJWE() + '=', header(sealed, { alg: 'none' }), header(sealed, { zip: 'DEF' }), header(sealed, { crit: [] }), header(sealed, { jwk: {} }), 'a'.repeat(24 * 1024 * 1024 + 1)]) await expect(parsed(value, data => s.decrypt(data, key))).rejects.toBeInstanceOf(DecryptionError);
   await expect(s.decryptText(await s.encrypt(new Uint8Array([255]), key), key)).rejects.toBeInstanceOf(DecryptionError);
 });
 test('password policy is validated before derivation', async () => {
@@ -20,8 +21,8 @@ test('password policy is validated before derivation', async () => {
   await expect(s.decryptWithPassword(sealed, 'wrong')).rejects.toBeInstanceOf(DecryptionError);
   const derive = spyOn(crypto.subtle, 'deriveKey');
   try {
-    for (const p2c of [0, 219999, 1000001, 220000.5, null, '220000', 1e100]) await expect(s.decryptWithPassword(header(sealed, { p2c }), 'password')).rejects.toBeInstanceOf(DecryptionError);
-    for (const p2s of ['', b64(new Uint8Array(15)), b64(new Uint8Array(65)), 'AA==']) await expect(s.decryptWithPassword(header(sealed, { p2s }), 'password')).rejects.toBeInstanceOf(DecryptionError);
+    for (const p2c of [0, 219999, 1000001, 220000.5, null, '220000', 1e100]) await expect(parsed(header(sealed, { p2c }), data => s.decryptWithPassword(data, 'password'))).rejects.toBeInstanceOf(DecryptionError);
+    for (const p2s of ['', b64(new Uint8Array(15)), b64(new Uint8Array(65)), 'AA==']) await expect(parsed(header(sealed, { p2s }), data => s.decryptWithPassword(data, 'password'))).rejects.toBeInstanceOf(DecryptionError);
     expect(derive).not.toHaveBeenCalled();
   } finally { derive.mockRestore(); }
   for (const password of ['', 'a'.repeat(1025), '💡'.repeat(257), '\ud800']) await expect(s.encryptTextWithPassword('', password)).rejects.toBeInstanceOf(InvalidArgumentError);
@@ -62,21 +63,21 @@ test('original header bytes and last duplicate member are authenticated', async 
   const iv = crypto.getRandomValues(new Uint8Array(12));
   const encrypted = new Uint8Array(await crypto.subtle.encrypt({ name: 'AES-GCM', iv, additionalData: utf8(protectedHeader), tagLength: 128 }, key, utf8('original header')));
   const value = [protectedHeader, '', b64(iv), b64(encrypted.subarray(0, -16)), b64(encrypted.subarray(-16))].join('.');
-  expect(await s.decryptText(value, key)).toBe('original header');
-  await expect(s.decryptText(header(value, {}), key)).rejects.toBeInstanceOf(DecryptionError);
+  expect(await s.decryptText(EncryptedData.fromBinary(EncryptedData.fromJWE(value).toBinary()), key)).toBe('original header');
+  await expect(parsed(header(value, {}), data => s.decryptText(data, key))).rejects.toBeInstanceOf(DecryptionError);
   const parts = value.split('.'), tag = parts[4]!;
   const alphabet = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_';
   parts[4] = tag.slice(0, -1) + alphabet[alphabet.indexOf(tag.at(-1)!) + 1];
-  await expect(s.decrypt(parts.join('.'), key)).rejects.toBeInstanceOf(DecryptionError);
+  await expect(parsed(parts.join('.'), data => s.decrypt(data, key))).rejects.toBeInstanceOf(DecryptionError);
 });
 test('protected JWK size, headers and oversized salts are rejected before KDF', async () => {
   const key = await s.generateKey(), backup = await s.exportKeyWithPassword(key, 'password');
   const derive = spyOn(crypto.subtle, 'deriveKey');
   try {
-    const oversized = backup.split('.'); oversized[3] = b64(new Uint8Array(32769));
-    await expect(s.importKeyWithPassword(oversized.join('.'), 'password')).rejects.toBeInstanceOf(DecryptionError);
-    await expect(s.importKeyWithPassword(header(backup, { cty: 'application/json' }), 'password')).rejects.toBeInstanceOf(DecryptionError);
-    await expect(s.importKeyWithPassword(header(backup, { p2s: 'A'.repeat(100000) }), 'password')).rejects.toBeInstanceOf(DecryptionError);
+    const oversized = backup.toJWE().split('.'); oversized[3] = b64(new Uint8Array(32769));
+    await expect(parsed(oversized.join('.'), data => s.importKeyWithPassword(data, 'password'))).rejects.toBeInstanceOf(DecryptionError);
+    await expect(parsed(header(backup, { cty: 'application/json' }), data => s.importKeyWithPassword(data, 'password'))).rejects.toBeInstanceOf(DecryptionError);
+    await expect(parsed(header(backup, { p2s: 'A'.repeat(100000) }), data => s.importKeyWithPassword(data, 'password'))).rejects.toBeInstanceOf(DecryptionError);
     expect(derive).not.toHaveBeenCalled();
   } finally { derive.mockRestore(); }
   await expect(s.importKey({ kty: 'oct', k: 'A'.repeat(32769) })).rejects.toBeInstanceOf(InvalidKeyError);

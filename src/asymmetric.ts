@@ -1,3 +1,4 @@
+import { EncryptedData } from './internal/jwe.js';
 import type { EncryptionKeyPair, EncryptionPrivateKey, EncryptionPublicKey, SigningKeyPair, SigningPrivateKey, SigningPublicKey } from './types.js';
 import { DecryptionError, EncryptionError, InvalidArgumentError, InvalidKeyError, SignatureError } from './errors.js';
 import { bytes, b64, unb64, utf8, text } from './internal/encoding.js';
@@ -12,7 +13,7 @@ export async function generateSigningKeyPair(): Promise<SigningKeyPair> {
   await requireEd25519();
   return await native(() => cryptoProvider().subtle.generateKey('Ed25519', true, ['sign', 'verify']), new InvalidKeyError('Key generation failed')) as SigningKeyPair;
 }
-export async function encrypt(data: Uint8Array, key: EncryptionPublicKey): Promise<string> {
+export async function encrypt(data: Uint8Array, key: EncryptionPublicKey): Promise<EncryptedData> {
   const copy = bytes(data); checkKey(key, 'encryption', 'encrypt');
   return native(async () => {
     const cek = await contentKey();
@@ -21,7 +22,7 @@ export async function encrypt(data: Uint8Array, key: EncryptionPublicKey): Promi
     return seal(copy, cek, { alg: 'RSA-OAEP-256', enc: 'A256GCM' }, wrapped);
   }, new EncryptionError('Encryption failed'));
 }
-export async function decrypt(value: string, key: EncryptionPrivateKey): Promise<Uint8Array> {
+export async function decrypt(value: EncryptedData, key: EncryptionPrivateKey): Promise<Uint8Array> {
   envelopeArgument(value); checkKey(key, 'encryption', 'decrypt');
   return decryptOperation(async () => {
     const e = parse(value, 'RSA-OAEP-256');
@@ -32,8 +33,8 @@ export async function decrypt(value: string, key: EncryptionPrivateKey): Promise
     return open(e, cek);
   });
 }
-export async function encryptText(value: string, key: EncryptionPublicKey): Promise<string> { return encrypt(utf8(value), key); }
-export async function decryptText(value: string, key: EncryptionPrivateKey): Promise<string> {
+export async function encryptText(value: string, key: EncryptionPublicKey): Promise<EncryptedData> { return encrypt(utf8(value), key); }
+export async function decryptText(value: EncryptedData, key: EncryptionPrivateKey): Promise<string> {
   const data = await decrypt(value, key);
   try { return text(data); } catch { throw new DecryptionError(); }
 }
@@ -78,9 +79,11 @@ export async function importSigningKey(jwk: JsonWebKey & { d: string }): Promise
 export async function importSigningKey(jwk: JsonWebKey & { d?: never }): Promise<SigningPublicKey>;
 export async function importSigningKey(jwk: JsonWebKey): Promise<SigningPublicKey | SigningPrivateKey>;
 export async function importSigningKey(jwk: JsonWebKey): Promise<SigningPublicKey | SigningPrivateKey> { return await importJwk(jwk, 'signing') as SigningPublicKey | SigningPrivateKey; }
-export async function exportKeyWithPassword(key: EncryptionPrivateKey | SigningPrivateKey, password: string): Promise<string> {
+export async function exportKeyWithPassword(key: EncryptionPrivateKey | SigningPrivateKey, password: string): Promise<EncryptedData> {
   checkKeyFamily(key);
   return exportProtected(key, password, key.algorithm.name === 'Ed25519' ? 'signing' : 'encryption');
 }
-export async function importEncryptionKeyWithPassword(value: string, password: string): Promise<EncryptionPrivateKey> { return await importProtected(value, password, 'encryption') as EncryptionPrivateKey; }
-export async function importSigningKeyWithPassword(value: string, password: string): Promise<SigningPrivateKey> { return await importProtected(value, password, 'signing') as SigningPrivateKey; }
+export async function importEncryptionKeyWithPassword(value: EncryptedData, password: string): Promise<EncryptionPrivateKey> { return await importProtected(value, password, 'encryption') as EncryptionPrivateKey; }
+export async function importSigningKeyWithPassword(value: EncryptedData, password: string): Promise<SigningPrivateKey> { return await importProtected(value, password, 'signing') as SigningPrivateKey; }
+
+export { EncryptedData } from './internal/jwe.js';

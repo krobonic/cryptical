@@ -1,5 +1,5 @@
 // This module is bundled with library imports externalized to built dist JavaScript.
-import { symmetric, asymmetric } from '../../index.js';
+import { EncryptedData, symmetric, asymmetric } from '../../index.js';
 import * as s from '../../src/symmetric.js';
 import * as a from '../../src/asymmetric.js';
 import type { EncryptionPublicKey, EncryptionPrivateKey, SigningPublicKey, SigningPrivateKey } from '../../src/types.js';
@@ -9,34 +9,44 @@ function check(value: boolean, label: string): void { if (!value) throw new Erro
 export interface Artifact {
   symmetric: JsonWebKey; encryptionPublic: JsonWebKey; encryptionPrivate: JsonWebKey;
   signingPublic: JsonWebKey; signingPrivate: JsonWebKey;
+  binary: Record<string, number[]>;
   dir: string; pbes: string; rsa: string; signature: string;
   symmetricBackup: string; encryptionBackup: string; signingBackup: string;
 }
-export type EncryptionArtifact = Pick<Artifact, 'symmetric' | 'encryptionPublic' | 'encryptionPrivate' | 'dir' | 'pbes' | 'rsa' | 'symmetricBackup' | 'encryptionBackup'>;
+export type EncryptionArtifact = Pick<Artifact, 'binary' | 'symmetric' | 'encryptionPublic' | 'encryptionPrivate' | 'dir' | 'pbes' | 'rsa' | 'symmetricBackup' | 'encryptionBackup'>;
 export async function produceEncryption(): Promise<EncryptionArtifact> {
   const key = await symmetric.generateKey(), recipient = await asymmetric.generateEncryptionKeyPair();
-  return {
+  const output = {
     symmetric: await s.exportKey(key), encryptionPublic: await a.exportKey(recipient.publicKey), encryptionPrivate: await a.exportKey(recipient.privateKey),
-    dir: await s.encryptText(message, key), pbes: await s.encryptTextWithPassword(message, password), rsa: await a.encryptText(message, recipient.publicKey),
-    symmetricBackup: await s.exportKeyWithPassword(key, password), encryptionBackup: await a.exportKeyWithPassword(recipient.privateKey, password),
+    dir: (await s.encryptText(message, key)).toJWE(), pbes: (await s.encryptTextWithPassword(message, password)).toJWE(), rsa: (await a.encryptText(message, recipient.publicKey)).toJWE(),
+    symmetricBackup: (await s.exportKeyWithPassword(key, password)).toJWE(), encryptionBackup: (await a.exportKeyWithPassword(recipient.privateKey, password)).toJWE(),
   };
+  const binary = Object.fromEntries((['dir', 'pbes', 'rsa', 'symmetricBackup', 'encryptionBackup'] as const).map(name => [name, Array.from(EncryptedData.fromJWE(output[name]).toBinary())]));
+  return { ...output, binary };
 }
 export async function produce(): Promise<Artifact> {
   const signer = await a.generateSigningKeyPair();
   return {
     ...await produceEncryption(), signingPublic: await a.exportKey(signer.publicKey), signingPrivate: await a.exportKey(signer.privateKey),
-    signature: await a.signText(message, signer.privateKey), signingBackup: await a.exportKeyWithPassword(signer.privateKey, password),
+    signature: await a.signText(message, signer.privateKey), signingBackup: (await a.exportKeyWithPassword(signer.privateKey, password)).toJWE(),
   };
 }
 export async function consumeEncryption(artifact: EncryptionArtifact): Promise<void> {
   const key = await s.importKey(artifact.symmetric), rsa = await a.importEncryptionKey(artifact.encryptionPrivate) as EncryptionPrivateKey;
   const publicKey = await a.importEncryptionKey(artifact.encryptionPublic) as EncryptionPublicKey;
-  check(await s.decryptText(artifact.dir, key) === message, 'dir');
-  check(await s.decryptTextWithPassword(artifact.pbes, password) === message, 'pbes');
-  check(await a.decryptText(artifact.rsa, rsa) === message, 'rsa');
+  for (const format of ['jwe', 'binary'] as const) {
+    const parse = (name: 'dir' | 'pbes' | 'rsa' | 'symmetricBackup' | 'encryptionBackup') => {
+      const data = format === 'jwe' ? EncryptedData.fromJWE(artifact[name]) : EncryptedData.fromBinary(new Uint8Array(artifact.binary[name]!));
+      check(data.toJWE() === artifact[name], 'exact JWE preservation');
+      return data;
+    };
+    check(await s.decryptText(parse('dir'), key) === message, 'dir');
+    check(await s.decryptTextWithPassword(parse('pbes'), password) === message, 'pbes');
+    check(await a.decryptText(parse('rsa'), rsa) === message, 'rsa');
+    check(await s.decryptText(parse('dir'), await s.importKeyWithPassword(parse('symmetricBackup'), password)) === message, 'symmetric backup');
+    check(await a.decryptText(parse('rsa'), await a.importEncryptionKeyWithPassword(parse('encryptionBackup'), password)) === message, 'RSA backup');
+  }
   check(await a.decryptText(await a.encryptText(message, publicKey), rsa) === message, 'public JWK');
-  check(await s.decryptText(artifact.dir, await s.importKeyWithPassword(artifact.symmetricBackup, password)) === message, 'symmetric backup');
-  check(await a.decryptText(artifact.rsa, await a.importEncryptionKeyWithPassword(artifact.encryptionBackup, password)) === message, 'RSA backup');
 }
 export async function consume(artifact: Artifact): Promise<void> {
   await consumeEncryption(artifact);
@@ -44,7 +54,7 @@ export async function consume(artifact: Artifact): Promise<void> {
   const verifier = await a.importSigningKey(artifact.signingPublic) as SigningPublicKey;
   check(await a.verifyText(message, artifact.signature, verifier), 'signature');
   check(await a.signText(message, signer) === artifact.signature, 'private signing JWK');
-  check(await a.signText(message, await a.importSigningKeyWithPassword(artifact.signingBackup, password)) === artifact.signature, 'signing backup');
+  check(await a.signText(message, await a.importSigningKeyWithPassword(EncryptedData.fromBinary(EncryptedData.fromJWE(artifact.signingBackup).toBinary()), password)) === artifact.signature, 'signing backup');
 }
 export async function adversarial(): Promise<void> {
   const f = fixture.ed25519;
@@ -60,11 +70,11 @@ export async function adversarial(): Promise<void> {
   check(!await a.verify(new Uint8Array(), sig, key), 'noncanonical R');
   check(!await a.verifyText('', 'AA==', key), 'noncanonical base64');
   const symmetric = await s.importKey(fixture.jwe.symmetric);
-  check(await s.decryptText(fixture.jwe.dir, symmetric) === fixture.jwe.message, 'saved dir fixture');
-  check(await s.decryptTextWithPassword(fixture.jwe.password, fixture.jwe.secret) === fixture.jwe.message, 'saved password fixture');
-  check(await a.decryptText(fixture.jwe.recipient, await a.importEncryptionKey(fixture.jwe.rsa)) === fixture.jwe.message, 'saved RSA fixture');
+  check(await s.decryptText(EncryptedData.fromBinary(EncryptedData.fromJWE(fixture.jwe.dir).toBinary()), symmetric) === fixture.jwe.message, 'saved dir fixture');
+  check(await s.decryptTextWithPassword(EncryptedData.fromBinary(EncryptedData.fromJWE(fixture.jwe.password).toBinary()), fixture.jwe.secret) === fixture.jwe.message, 'saved password fixture');
+  check(await a.decryptText(EncryptedData.fromBinary(EncryptedData.fromJWE(fixture.jwe.recipient).toBinary()), await a.importEncryptionKey(fixture.jwe.rsa)) === fixture.jwe.message, 'saved RSA fixture');
   const parts = fixture.jwe.dir.split('.'); parts[4] = 'AAAAAAAAAAAAAAAAAAAAAA';
-  try { await s.decrypt(parts.join('.'), symmetric); throw new Error('accepted corruption'); }
+  try { await s.decrypt(EncryptedData.fromBinary(EncryptedData.fromJWE(parts.join('.')).toBinary()), symmetric); throw new Error('accepted corruption'); }
   catch (error) { check(error instanceof Error && error.name === 'DecryptionError', 'uniform decryption error'); }
 }
 /** Run on named devices for release records; milliseconds, after one warm-up. */

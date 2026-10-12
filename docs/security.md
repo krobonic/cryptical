@@ -12,7 +12,7 @@ Generated/imported long-lived keys are extractable for portability. Unprotected 
 
 All encryption uses native random IVs. Rotate long-lived direct symmetric keys before 2^24 encryptions, counting all devices/processes sharing the key. This conservative bound is guidance; the stateless library cannot enforce a global counter. Password/recipient messages have fresh content keys. Never choose IVs yourself. RSA-3072 does not provide 256-bit security merely because its content cipher is AES-256.
 
-Only bounded one-shot operations are supported. Payloads are copied and base64 expands allocation. No plaintext is returned until authentication succeeds. Decryption errors do not reveal which processing stage failed, but constant timing is not promised. Protect applications against timing-based oracles independently.
+Only bounded one-shot operations are supported. Payloads are copied; explicit JWE serialization adds base64 allocation. Binary envelopes retain raw ciphertext. Parsing validates structure and resource bounds but does not authenticate the payload; authentication occurs during decryption. No plaintext is returned until authentication succeeds. Decryption errors do not reveal which processing stage failed, but constant timing is not promised. Protect applications against timing-based oracles independently.
 
 ## Local verification record
 
@@ -26,6 +26,13 @@ Implementation run on Mac17,8 / Apple M5 Pro, macOS 26.5.2 (25F84), 2026-09-24:
 - Node 22.14.0 password operations on this desktop, one warm-up followed by 10 samples: encryption median **46.77 ms**, max **51.39 ms**; decryption median **46.70 ms**, max **52.04 ms**. These are local measurements, not performance guarantees. Mobile timings remain unmeasured.
 
 Actual Chrome/Edge, Safari/iOS Safari, mobile benchmarks, and independent review are still outstanding. Engine-specific behavior can differ by OS/native provider; CI intentionally keeps the full-support gate strict.
+
+## Binary envelope verification, 2026-10-12
+
+- Core, security, interoperability and serialization coverage: 25 passing tests, including independent golden binary bytes, exact JWE preservation, malformed framing, authentication failures, defensive copies and protected key backups. The ordinary suite skips the separate runtime gate.
+- Portable source, test and declaration-consumer TypeScript checks passed; build and package checks passed. Combined minified/gzipped browser entry: 4,993 bytes (15,360-byte budget). The local `tsc` launcher was broken (`../lib/tsc.js` could not be resolved), so checks invoked the installed TypeScript compiler directly with Bun.
+- Bun 1.4.2, Node 22.14.0, Chromium 153.0.8010.12 and WebKit 26.6 passed all 16 available encryption/JWK/protected-backup producer/consumer combinations, exercising both binary and JWE serialization. Bun, Node and Chromium passed all nine available full API combinations.
+- The full runtime gate still fails: Firefox could not launch because its generated profile directory was inaccessible, including a retry with a different temporary directory. WebKit 26.6 still fails the previously recorded native Ed25519 vector. The harness now continues after a browser launch failure to collect results from other engines, then fails the full-support gate.
 
 ## Runtime and release gates
 

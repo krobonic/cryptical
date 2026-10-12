@@ -7,7 +7,7 @@ describe('public API', () => {
     for (const value of ['', '\ufeff hello\r\n世界 👩🏽‍💻 ', 'é', 'e\u0301']) expect(await s.decryptText(await s.encryptText(value, key), key)).toBe(value);
     const input = new Uint8Array([99, 0, 255, 99]).subarray(1, 3);
     expect(await s.decrypt(await s.encrypt(input, key), key)).toEqual(input);
-    expect(await s.encryptText('same', key)).not.toBe(await s.encryptText('same', key));
+    expect((await s.encryptText('same', key)).toJWE()).not.toBe((await s.encryptText('same', key)).toJWE());
     expect(await s.exportKey(await s.importKey(await s.exportKey(key)))).toEqual(await s.exportKey(key));
   });
   test('copies bytes synchronously', async () => {

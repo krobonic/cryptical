@@ -1,3 +1,4 @@
+import { EncryptedData } from './jwe.js';
 import { CryptoUnavailableError, DecryptionError, InvalidKeyError } from '../errors.js';
 import { checkKey, cryptoProvider, native, requireEd25519 } from './crypto.js';
 import type { Purpose } from './crypto.js';
@@ -61,12 +62,12 @@ export async function exportJwk(key: CryptoKey, purpose: Purpose): Promise<JsonW
   if (purpose === 'signing') jwk.alg = 'EdDSA';
   return jwk;
 }
-export async function exportProtected(key: CryptoKey, password: string, purpose: Purpose): Promise<string> {
+export async function exportProtected(key: CryptoKey, password: string, purpose: Purpose): Promise<EncryptedData> {
   checkKey(key, purpose);
   if (purpose !== 'symmetric' && key.type !== 'private') throw new InvalidKeyError('Protected export requires a private key');
   return passwordSeal(utf8(JSON.stringify(await exportJwk(key, purpose)), MAX_JWK), password, 'jwk+json');
 }
-export async function importProtected(value: string, password: string, purpose: Purpose): Promise<CryptoKey> {
+export async function importProtected(value: EncryptedData, password: string, purpose: Purpose): Promise<CryptoKey> {
   const data = await passwordOpen(value, password, 'jwk+json');
   try {
     if (data.length > MAX_JWK) throw new DecryptionError();

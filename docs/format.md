@@ -30,7 +30,34 @@ JWK imports accept AES-256 (`oct`), RSA 3072/4096 bits with exponent 65537 and f
 
 Detached Ed25519 signatures follow [RFC 8032](https://www.rfc-editor.org/rfc/rfc8032.html), exactly 64 raw bytes (`R || S`), or canonical unpadded base64url for text APIs. No JWS header or prehash is added. Text decoding is strict UTF-8, including preserved leading BOM; malformed decrypted UTF-8 fails text decryption while byte decryption remains available.
 
-## Decrypt without this package
+## Binary envelope, version 1
+
+Encryption and protected key exports return `EncryptedData`. `toBinary()` serializes the following custom format; `fromBinary()` parses it. All integers are unsigned, big-endian. Offsets are byte offsets.
+
+| Offset | Length | Field |
+| --- | --- | --- |
+| 0 | 4 | Magic ASCII `CKIT` (`43 4b 49 54` hex) |
+| 4 | 1 | Version, exactly `01` |
+| 5 | 4 | H: encoded protected header length |
+| 9 | 4 | K: wrapped key length |
+| 13 | 4 | C: ciphertext length, excluding tag |
+| 17 | H | Exact original base64url protected header, ASCII bytes |
+| 17 + H | K | Raw wrapped key (empty for `dir`) |
+| 17 + H + K | 12 | Raw IV |
+| 29 + H + K | C | Raw ciphertext |
+| 29 + H + K + C | 16 | Raw authentication tag |
+
+Total length is `45 + H + K + C` bytes. H is 1–5,462 bytes and must decode to at most 4,096 bytes of valid supported header JSON. K is 0 for `dir`, 40 for PBES2, or 384/512 for RSA. C is at most 16 MiB, or 32 KiB for protected JWKs. Empty plaintext has C=0. The maximum binary length is 16,783,235 bytes. Parsers reject truncation, trailing bytes, invalid lengths, unknown versions, and invalid magic before cryptographic operations. Password work parameters are validated before derivation.
+
+The protected header is intentionally retained in its exact JWE encoding because those ASCII bytes are AES-GCM additional authenticated data. Reformatting JSON or changing duplicate member handling during serialization would invalidate authentication. Binary framing is not additional authenticated data: version 1 accepts one exact layout with no optional or ignored fields. The protected header, IV, ciphertext and tag retain their existing cryptographic authentication semantics; the wrapped key must successfully recover the content key and authenticate the payload. Future versions must assess version-confusion risks rather than silently accepting new framing.
+
+`toJWE()` and `fromJWE()` use the compact serialization described above. Supported JWE → binary → JWE conversions preserve the entire original string exactly, without decrypting or encrypting. The ciphertext remains raw in memory until JWE serialization is requested. Binary parsers snapshot input byte views and serializers return independent arrays.
+
+Both parsers throw `InvalidArgumentError` for the wrong argument type and `DecryptionError` for malformed or unsupported envelopes. Parsing establishes structure only, not authenticity. Decryption also enforces the expected algorithm and payload purpose: ordinary decryption rejects protected key backups, and protected key imports require `cty: "jwk+json"`. Authentication failures return no plaintext.
+
+To decrypt a binary envelope with an independent JWE implementation, first convert it with `EncryptedData.fromBinary(bytes).toJWE()`, or implement this framing specification and reconstruct the five JWE segments. The binary format itself is not JWE or COSE.
+
+## Decrypt JWE without this package
 
 This example uses the independent `jose` package (a development test oracle, not a library runtime dependency):
 

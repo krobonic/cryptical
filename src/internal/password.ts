@@ -1,3 +1,4 @@
+import { EncryptedData } from './jwe.js';
 import { EncryptionError, InvalidArgumentError } from '../errors.js';
 import { b64, concat, unb64, utf8 } from './encoding.js';
 import { cryptoProvider, decryptOperation, native, random } from './crypto.js';
@@ -12,7 +13,7 @@ async function derive(password: Uint8Array<ArrayBuffer>, salt: Uint8Array<ArrayB
   const material = await subtle.importKey('raw', password, 'PBKDF2', false, ['deriveKey']);
   return subtle.deriveKey({ name: 'PBKDF2', hash: 'SHA-512', salt: concat(utf8(PBES), new Uint8Array(1), salt), iterations }, material, { name: 'AES-KW', length: 256 }, false, [usage]);
 }
-export async function passwordSeal(data: Uint8Array<ArrayBuffer>, password: string, cty?: 'jwk+json'): Promise<string> {
+export async function passwordSeal(data: Uint8Array<ArrayBuffer>, password: string, cty?: 'jwk+json'): Promise<EncryptedData> {
   const secret = passwordBytes(password);
   return native(async () => {
     const salt = random(32), key = await contentKey();
@@ -21,7 +22,7 @@ export async function passwordSeal(data: Uint8Array<ArrayBuffer>, password: stri
     return seal(data, key, { alg: PBES, enc: 'A256GCM', p2s: b64(salt), p2c: 220000, ...(cty ? { cty } : {}) }, wrapped);
   }, new EncryptionError('Password encryption failed'));
 }
-export async function passwordOpen(value: string, password: string, cty?: 'jwk+json'): Promise<Uint8Array<ArrayBuffer>> {
+export async function passwordOpen(value: EncryptedData, password: string, cty?: 'jwk+json'): Promise<Uint8Array<ArrayBuffer>> {
   envelopeArgument(value);
   const secret = passwordBytes(password);
   cryptoProvider();
