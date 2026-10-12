@@ -1,0 +1,24 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>Cypherkit native runtime verification</title>
+<h1>Cypherkit native runtime verification</h1>
+<p>This development harness uses public test keys. Run over localhost or HTTPS.</p>
+<button id="produce">Generate exchange artifact</button>
+<button id="encryption">Generate encryption-only artifact</button>
+<button id="consume">Consume pasted artifact</button>
+<button id="benchmark">Measure password operations</button>
+<textarea id="artifact" rows="12" cols="90" aria-label="Public test exchange artifact"></textarea>
+<pre id="result"></pre>
+<script type="module">
+  import * as cases from '../.generated/cases.js';
+  window.cases = cases;
+  const output = document.querySelector('#result'), input = document.querySelector('#artifact');
+  async function run(operation) {
+    try { output.textContent = JSON.stringify(await operation(), null, 2) ?? 'Passed'; }
+    catch (error) { output.textContent = String(error); }
+  }
+  document.querySelector('#produce').onclick = () => run(async () => { await cases.adversarial(); input.value = JSON.stringify(await cases.produce()); return 'Copy artifact to another runtime'; });
+  document.querySelector('#encryption').onclick = () => run(async () => { input.value = JSON.stringify(await cases.produceEncryption()); return 'Encryption artifact ready'; });
+  document.querySelector('#consume').onclick = () => run(() => { const artifact = JSON.parse(input.value); return artifact.signature ? cases.consume(artifact) : cases.consumeEncryption(artifact); });
+  document.querySelector('#benchmark').onclick = () => run(cases.benchmark);
+</script>

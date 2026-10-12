@@ -1,27 +1,44 @@
 {
-  "name": "cipherkit",
-  "repository": "krobonic/cipherkit",
-  "version": "0.0.1",
-  "module": "dist/index.js",
-  "types": "dist/index.d.ts",
+  "name": "cypherkit2",
+  "version": "0.1.0",
+  "description": "Portable native Web Crypto encryption and signatures",
+  "type": "module",
+  "sideEffects": false,
+  "files": [
+    "dist",
+    "README.md",
+    "docs"
+  ],
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
   "exports": {
     ".": {
-      "import": "./dist/index.js",
-      "types": "./dist/index.d.ts"
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./symmetric": {
+      "types": "./dist/src/symmetric.d.ts",
+      "import": "./dist/src/symmetric.js"
+    },
+    "./asymmetric": {
+      "types": "./dist/src/asymmetric.d.ts",
+      "import": "./dist/src/asymmetric.js"
     }
   },
-  "files": [
-    "dist"
-  ],
+  "engines": {
+    "node": ">=22.13.0"
+  },
   "scripts": {
+    "typecheck": "tsc --noEmit && tsc -p tsconfig.build.json && tsc -p tsconfig.test.json && tsc -p tsconfig.consumer.json",
+    "build": "bun scripts/build.ts && tsc -p tsconfig.build.json",
     "test": "bun test",
-    "build": "rm -rf dist && bun build ./src/index.ts --outdir ./dist --target browser && tsc"
+    "test:runtime": "bun run build && CYPHERKIT_RUNTIME=1 bun test tests/runtime.test.ts",
+    "check:package": "bun scripts/build.ts --check"
   },
   "devDependencies": {
-    "@types/bun": "^1.3.8"
-  },
-  "peerDependencies": {
-    "typescript": "^5.9.3"
-  },
-  "type": "module"
+    "@types/bun": "1.3.10",
+    "jose": "6.1.3",
+    "playwright": "1.63.0",
+    "typescript": "5.9.3"
+  }
 }
