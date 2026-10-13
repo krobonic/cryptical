@@ -25,6 +25,22 @@ async function consumer() {
   await a.decryptText(await a.encryptText('text', recipient.publicKey), encryption);
   const signing = await asymmetric.unwrapKey(await a.wrapKey(signer.privateKey, recipient.publicKey), recipient.privateKey, { purpose: 'signing' });
   await a.signText('text', signing);
+  const symmetricWrapped = await symmetric.wrapKey(key, key);
+  await s.encryptText('text', await s.unwrapKey(symmetricWrapped, key, { purpose: 'symmetric' }));
+  const symmetricEncryption = await s.unwrapKey(await s.wrapKey(recipient.privateKey, key), key, { purpose: 'encryption' });
+  await a.decrypt(wrapped, symmetricEncryption);
+  const symmetricSigning = await symmetric.unwrapKey(await s.wrapKey(signer.privateKey, key), key, { purpose: 'signing' });
+  await a.signText('text', symmetricSigning);
+  // @ts-expect-error Public payload keys cannot be wrapped.
+  await s.wrapKey(recipient.publicKey, key);
+  // @ts-expect-error Wrapping key must be symmetric.
+  await s.wrapKey(key, recipient.publicKey);
+  // @ts-expect-error An explicit purpose is required.
+  await s.unwrapKey(symmetricWrapped, key);
+  // @ts-expect-error Unsupported purpose.
+  await s.unwrapKey(symmetricWrapped, key, { purpose: 'public' });
+  // @ts-expect-error Restored signing keys cannot decrypt.
+  await s.decrypt(symmetricWrapped, symmetricSigning);
   // @ts-expect-error Wrapped public keys are forbidden.
   await a.wrapKey(recipient.publicKey, recipient.publicKey);
   // @ts-expect-error Recipients must have encryption public keys.

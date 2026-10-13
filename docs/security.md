@@ -41,6 +41,13 @@ Actual Chrome/Edge, Safari/iOS Safari, mobile benchmarks, and independent review
 - The runtime harness now exchanges wrapped symmetric and RSA private keys in both serializations across all 16 available Bun/Node/Chromium/WebKit combinations. All nine Bun/Node/Chromium full API combinations also passed, including wrapped Ed25519 private keys.
 - The full runtime gate remains failing for the previously recorded Firefox profile launch error and WebKit native Ed25519 failure. Recipient wrapping does not authenticate the sender; restored keys remain extractable under the existing import policy.
 
+## Symmetric key wrapping verification, 2026-10-12
+
+- All 34 core/security/interoperability/serialization tests passed. New coverage includes symmetric wrapping of all three supported key purposes, binary/JWE serialization, JOSE interchange, nonextractable wrapping keys, key usage validation, purpose validation, tampering, and rejection of incompatible envelopes and invalid JWKs.
+- Source, test and consumer declaration checks, build and package checks passed using the installed TypeScript compiler directly. Combined browser entry: 5,172 bytes minified/gzipped.
+- Symmetrically wrapped AES and RSA keys passed all 16 available Bun/Node/Chromium/WebKit producer/consumer combinations. Wrapped Ed25519 keys also passed the nine Bun/Node/Chromium full API combinations. The full runtime gate still fails on the existing Firefox profile launch error and WebKit Ed25519 vector failure.
+- Symmetric wrapping uses fresh random AES-GCM IVs under the wrapping key. Count these operations together with ordinary encryption when applying the direct-key rotation guidance above. A wrapping key may be nonextractable; the payload key must be extractable.
+
 ## Runtime and release gates
 
 Target Node 22.13+ on supported release lines; CI runs Node 22, 24, and 26 (26 is additionally a smoke target). Browsers require HTTPS or localhost and native AES-GCM, AES-KW, PBKDF2/SHA-512, RSA-OAEP/SHA-256 and Ed25519. Unsupported native algorithms raise CryptoUnavailableError; no polyfill, WASM, algorithm substitution, network discovery, or handwritten cryptography is used.

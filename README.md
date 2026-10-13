@@ -166,6 +166,26 @@ Wrapping encrypts a bounded JWK payload with RSA-OAEP-256/AES-256-GCM and an aut
 
 Anyone with the recipient's public key can produce a wrapped key for them; wrapping does not authenticate the sender. Use the password-protected export/import methods above when protecting a key with a password.
 
+### Wrap a key with a symmetric key
+
+`symmetric.wrapKey()` protects the same symmetric and private key types using an AES-256-GCM wrapping key. `symmetric.unwrapKey()` requires the expected purpose and returns the corresponding key type, just like recipient unwrapping.
+
+```ts
+const wrappingKey = await symmetric.generateKey();
+const key = await symmetric.generateKey();
+const wrapped = await symmetric.wrapKey(key, wrappingKey);
+
+const restored = await symmetric.unwrapKey(
+  symmetric.EncryptedData.fromBinary(wrapped.toBinary()),
+  wrappingKey,
+  { purpose: 'symmetric' },
+);
+```
+
+Use `purpose: 'encryption'` for an RSA private key or `'signing'` for an Ed25519 private key. Wrapped results also support `.toJWE()`. The payload key must be extractable; the wrapping key can be nonextractable and must permit `encrypt` for wrapping or `decrypt` for unwrapping. Restored keys follow the existing extractable-key import policy.
+
+This uses an AES-GCM envelope with `alg: "dir"` and authenticated `cty: "jwk+json"`, with a fresh random IV on each wrap. It is not an AES-KW algorithm interface. Ordinary decryption rejects wrapped-key envelopes, and unwrapping rejects ordinary ciphertext or envelopes protected by a different wrapping mechanism. Keep the wrapping key separately protected. The existing direct-key IV rotation guidance counts wrapping and ordinary encryption operations together.
+
 ## Byte APIs and encoding
 
 Use the text helpers for strings and the byte APIs for `Uint8Array` data:

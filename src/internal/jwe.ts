@@ -70,8 +70,7 @@ function malformed<T>(operation: () => T): T {
 function readHeader(value: string): Header {
   const header: Header = JSON.parse(text(unb64(value, 4096)));
   if (!header || typeof header !== 'object' || Array.isArray(header) || !['dir', 'RSA-OAEP-256', PBES].includes(header.alg) || header.enc !== 'A256GCM' || (header.cty !== undefined && header.cty !== 'jwk+json')) throw new DecryptionError();
-  if (header.cty !== undefined && header.alg === 'dir') throw new DecryptionError();
-  const allowed = header.alg === PBES ? ['alg', 'enc', 'p2s', 'p2c', 'cty'] : header.alg === 'RSA-OAEP-256' ? ['alg', 'enc', 'cty'] : ['alg', 'enc'];
+  const allowed = header.alg === PBES ? ['alg', 'enc', 'p2s', 'p2c', 'cty'] : ['alg', 'enc', 'cty'];
   if (Object.keys(header).some(k => !allowed.includes(k))) throw new DecryptionError();
   if (header.alg === PBES) {
     if (!Number.isInteger(header.p2c) || header.p2c! < 220000 || header.p2c! > 1000000 || typeof header.p2s !== 'string') throw new DecryptionError();

@@ -7,28 +7,34 @@ import fixture from '../fixtures/interop.json';
 const message = '\ufeffnative interchange 世界 👩🏽‍💻\r\n', password = 'test only 密碼 🔐';
 function check(value: boolean, label: string): void { if (!value) throw new Error(label); }
 export interface Artifact {
+  wrappingKey: JsonWebKey;
   symmetric: JsonWebKey; encryptionPublic: JsonWebKey; encryptionPrivate: JsonWebKey;
   signingPublic: JsonWebKey; signingPrivate: JsonWebKey;
   binary: Record<string, number[]>;
   dir: string; pbes: string; rsa: string; signature: string;
   symmetricBackup: string; encryptionBackup: string; signingBackup: string;
+  sharedSymmetric: string; sharedEncryption: string; sharedSigning: string;
   wrappedSymmetric: string; wrappedEncryption: string; wrappedSigning: string;
 }
-export type EncryptionArtifact = Pick<Artifact, 'binary' | 'symmetric' | 'encryptionPublic' | 'encryptionPrivate' | 'dir' | 'pbes' | 'rsa' | 'symmetricBackup' | 'encryptionBackup' | 'wrappedSymmetric' | 'wrappedEncryption'>;
+export type EncryptionArtifact = Pick<Artifact, 'wrappingKey' | 'sharedSymmetric' | 'sharedEncryption' | 'binary' | 'symmetric' | 'encryptionPublic' | 'encryptionPrivate' | 'dir' | 'pbes' | 'rsa' | 'symmetricBackup' | 'encryptionBackup' | 'wrappedSymmetric' | 'wrappedEncryption'>;
 export async function produceEncryption(): Promise<EncryptionArtifact> {
+  const wrappingKey = await s.generateKey();
   const key = await symmetric.generateKey(), recipient = await asymmetric.generateEncryptionKeyPair();
   const output = {
+    wrappingKey: await s.exportKey(wrappingKey),
+    sharedSymmetric: (await s.wrapKey(key, wrappingKey)).toJWE(), sharedEncryption: (await s.wrapKey(recipient.privateKey, wrappingKey)).toJWE(),
     symmetric: await s.exportKey(key), encryptionPublic: await a.exportKey(recipient.publicKey), encryptionPrivate: await a.exportKey(recipient.privateKey),
     dir: (await s.encryptText(message, key)).toJWE(), pbes: (await s.encryptTextWithPassword(message, password)).toJWE(), rsa: (await a.encryptText(message, recipient.publicKey)).toJWE(),
     wrappedSymmetric: (await a.wrapKey(key, recipient.publicKey)).toJWE(), wrappedEncryption: (await a.wrapKey(recipient.privateKey, recipient.publicKey)).toJWE(),
     symmetricBackup: (await s.exportKeyWithPassword(key, password)).toJWE(), encryptionBackup: (await a.exportKeyWithPassword(recipient.privateKey, password)).toJWE(),
   };
-  const binary = Object.fromEntries((['dir', 'pbes', 'rsa', 'symmetricBackup', 'encryptionBackup', 'wrappedSymmetric', 'wrappedEncryption'] as const).map(name => [name, Array.from(EncryptedData.fromJWE(output[name]).toBinary())]));
+  const binary = Object.fromEntries((['dir', 'pbes', 'rsa', 'symmetricBackup', 'encryptionBackup', 'wrappedSymmetric', 'wrappedEncryption', 'sharedSymmetric', 'sharedEncryption'] as const).map(name => [name, Array.from(EncryptedData.fromJWE(output[name]).toBinary())]));
   return { ...output, binary };
 }
 export async function produce(): Promise<Artifact> {
   const signer = await a.generateSigningKeyPair(), encryption = await produceEncryption();
   return {
+    sharedSigning: (await s.wrapKey(signer.privateKey, await s.importKey(encryption.wrappingKey))).toJWE(),
     wrappedSigning: (await a.wrapKey(signer.privateKey, await a.importEncryptionKey(encryption.encryptionPublic) as EncryptionPublicKey)).toJWE(),
     ...encryption, signingPublic: await a.exportKey(signer.publicKey), signingPrivate: await a.exportKey(signer.privateKey),
     signature: await a.signText(message, signer.privateKey), signingBackup: (await a.exportKeyWithPassword(signer.privateKey, password)).toJWE(),
@@ -36,13 +42,16 @@ export async function produce(): Promise<Artifact> {
 }
 export async function consumeEncryption(artifact: EncryptionArtifact): Promise<void> {
   const key = await s.importKey(artifact.symmetric), rsa = await a.importEncryptionKey(artifact.encryptionPrivate) as EncryptionPrivateKey;
+  const wrappingKey = await s.importKey(artifact.wrappingKey);
   const publicKey = await a.importEncryptionKey(artifact.encryptionPublic) as EncryptionPublicKey;
   for (const format of ['jwe', 'binary'] as const) {
-    const parse = (name: 'dir' | 'pbes' | 'rsa' | 'symmetricBackup' | 'encryptionBackup' | 'wrappedSymmetric' | 'wrappedEncryption') => {
+    const parse = (name: 'dir' | 'pbes' | 'rsa' | 'symmetricBackup' | 'encryptionBackup' | 'wrappedSymmetric' | 'wrappedEncryption' | 'sharedSymmetric' | 'sharedEncryption') => {
       const data = format === 'jwe' ? EncryptedData.fromJWE(artifact[name]) : EncryptedData.fromBinary(new Uint8Array(artifact.binary[name]!));
       check(data.toJWE() === artifact[name], 'exact JWE preservation');
       return data;
     };
+    check(await s.decryptText(parse('dir'), await s.unwrapKey(parse('sharedSymmetric'), wrappingKey, { purpose: 'symmetric' })) === message, 'shared symmetric key');
+    check(await a.decryptText(parse('rsa'), await s.unwrapKey(parse('sharedEncryption'), wrappingKey, { purpose: 'encryption' })) === message, 'shared encryption key');
     const unwrappedSymmetric = await a.unwrapKey(parse('wrappedSymmetric'), rsa, { purpose: 'symmetric' });
     const unwrappedEncryption = await a.unwrapKey(parse('wrappedEncryption'), rsa, { purpose: 'encryption' });
     check(await s.decryptText(parse('dir'), unwrappedSymmetric) === message, 'wrapped symmetric key');
@@ -60,6 +69,11 @@ export async function consume(artifact: Artifact): Promise<void> {
   const signer = await a.importSigningKey(artifact.signingPrivate) as SigningPrivateKey;
   const verifier = await a.importSigningKey(artifact.signingPublic) as SigningPublicKey;
   const recipient = await a.importEncryptionKey(artifact.encryptionPrivate) as EncryptionPrivateKey;
+  const sharedSigning = EncryptedData.fromJWE(artifact.sharedSigning);
+  for (const data of [sharedSigning, EncryptedData.fromBinary(sharedSigning.toBinary())]) {
+    const unwrapped = await s.unwrapKey(data, await s.importKey(artifact.wrappingKey), { purpose: 'signing' });
+    check(await a.signText(message, unwrapped) === artifact.signature, 'shared signing key');
+  }
   const wrappedSigning = EncryptedData.fromJWE(artifact.wrappedSigning);
   for (const data of [wrappedSigning, EncryptedData.fromBinary(wrappedSigning.toBinary())]) {
     const unwrapped = await a.unwrapKey(data, recipient, { purpose: 'signing' });
