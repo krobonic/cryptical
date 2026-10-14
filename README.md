@@ -104,6 +104,8 @@ Signatures are detached: store or transmit the original message alongside its si
 
 Ordinary exports return standard JWK objects. **Symmetric and private JWK exports contain unencrypted secrets.** Password-protected exports return `EncryptedData` objects; protected asymmetric exports accept only private keys.
 
+Ordinary export, password backups, and both wrapping methods require payload keys whose usages exactly match the import policy: `encrypt` and `decrypt` for symmetric keys, `encrypt` or `decrypt` for RSA public or private keys, and `verify` or `sign` for Ed25519 public or private keys. Unsupported payload usages raise `InvalidKeyError` before an export or backup is returned; permissions are never broadened. This restriction applies to the payload key. A symmetric wrapping key may still be nonextractable and permit only `encrypt` for wrapping or only `decrypt` for unwrapping.
+
 This example exports a public encryption key and creates a protected backup of its private key:
 
 ```ts

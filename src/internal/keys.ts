@@ -60,7 +60,8 @@ export async function exportJwk(key: CryptoKey, purpose: Purpose): Promise<JsonW
   if (!key.extractable) throw new InvalidKeyError('Key is not extractable');
   const jwk = await native(() => cryptoProvider().subtle.exportKey('jwk', key), new InvalidKeyError('JWK export failed'));
   if (purpose === 'signing') jwk.alg = 'EdDSA';
-  return jwk;
+  // Every export, including protected payloads, must satisfy the import policy.
+  return validate(jwk, purpose).jwk;
 }
 export async function exportProtectedBytes(key: CryptoKey, purpose: Purpose): Promise<Uint8Array<ArrayBuffer>> {
   checkKey(key, purpose);
