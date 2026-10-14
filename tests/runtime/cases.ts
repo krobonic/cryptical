@@ -1,5 +1,5 @@
 // This module is bundled with library imports externalized to built dist JavaScript.
-import { EncryptedData, symmetric, asymmetric } from '../../index.js';
+import { EncryptedData, symmetric, asymmetric, InvalidKeyError } from '../../index.js';
 import * as s from '../../src/symmetric.js';
 import * as a from '../../src/asymmetric.js';
 import type { EncryptionPublicKey, EncryptionPrivateKey, SigningPublicKey, SigningPrivateKey } from '../../src/types.js';
@@ -96,6 +96,20 @@ export async function adversarial(): Promise<void> {
   sig.fill(255, 0, 32);
   check(!await a.verify(new Uint8Array(), sig, key), 'noncanonical R');
   check(!await a.verifyText('', 'AA==', key), 'noncanonical base64');
+  const privateJwk = { kty: 'OKP', crv: 'Ed25519', x: encode(hex(f.publicKey)), d: encode(hex(f.seed)) };
+  const other = await a.exportKey((await a.generateSigningKeyPair()).privateKey);
+  for (const alg of [undefined, 'EdDSA', 'Ed25519']) {
+    const imported = await a.importSigningKey({ ...privateJwk, alg });
+    const exported = await a.exportKey(imported);
+    check(exported.x === privateJwk.x && exported.d === privateJwk.d && exported.alg === 'EdDSA', 'private Ed25519 JWK preservation');
+    check(encode(await a.sign(new Uint8Array(), imported)) === encode(hex(f.signature)), 'imported private Ed25519 signature');
+    for (const mismatch of [{ x: other.x }, { d: other.d }]) {
+      try {
+        await a.importSigningKey({ ...privateJwk, alg, ...mismatch });
+        throw new Error('accepted inconsistent Ed25519 private JWK');
+      } catch (error) { check(error instanceof InvalidKeyError, 'inconsistent Ed25519 private JWK error'); }
+    }
+  }
   const symmetric = await s.importKey(fixture.jwe.symmetric);
   check(await s.decryptText(EncryptedData.fromBinary(EncryptedData.fromJWE(fixture.jwe.dir).toBinary()), symmetric) === fixture.jwe.message, 'saved dir fixture');
   check(await s.decryptTextWithPassword(EncryptedData.fromBinary(EncryptedData.fromJWE(fixture.jwe.password).toBinary()), fixture.jwe.secret) === fixture.jwe.message, 'saved password fixture');
