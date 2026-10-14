@@ -1,6 +1,6 @@
 import { EncryptedData } from './jwe.js';
 import { CryptoUnavailableError, DecryptionError, InvalidKeyError } from '../errors.js';
-import { checkKey, cryptoProvider, native, requireEd25519 } from './crypto.js';
+import { checkKey, cryptoProvider, native, random, requireEd25519 } from './crypto.js';
 import type { Purpose } from './crypto.js';
 import { unb64, utf8, text } from './encoding.js';
 import { passwordOpen, passwordSeal } from './password.js';
@@ -60,7 +60,17 @@ export async function importJwk(value: JsonWebKey, purpose: Purpose): Promise<Cr
       if (exported.x !== jwk.x) throw new InvalidKeyError('Inconsistent Ed25519 private JWK');
       return key;
     }
-    return await native(() => cryptoProvider().subtle.importKey('jwk', jwk, algorithm, true, usages), new InvalidKeyError('JWK import failed'));
+    const key = await native(() => cryptoProvider().subtle.importKey('jwk', jwk, algorithm, true, usages), new InvalidKeyError('JWK import failed'));
+    if (purpose === 'encryption' && jwk.d !== undefined) {
+      // Native import may accept unusable private material. Check an actual OAEP
+      // round trip against the supplied public components, not RSA arithmetic.
+      const publicKey = await native(() => cryptoProvider().subtle.importKey('jwk', { kty: 'RSA', n: jwk.n, e: jwk.e }, algorithm, false, ['encrypt']), new InvalidKeyError('RSA public import failed'));
+      const challenge = random(32);
+      const encrypted = await native(() => cryptoProvider().subtle.encrypt('RSA-OAEP', publicKey, challenge), new InvalidKeyError('RSA usability check failed'));
+      const recovered = new Uint8Array(await native(() => cryptoProvider().subtle.decrypt('RSA-OAEP', key, encrypted), new InvalidKeyError('RSA usability check failed')));
+      if (recovered.length !== challenge.length || !challenge.every((byte, i) => byte === recovered[i])) throw new InvalidKeyError('Unusable RSA private JWK');
+    }
+    return key;
   } catch (error) {
     if (error instanceof CryptoUnavailableError) throw error;
     throw new InvalidKeyError('Invalid or incompatible JWK');

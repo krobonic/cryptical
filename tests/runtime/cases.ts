@@ -84,6 +84,12 @@ export async function consume(artifact: Artifact): Promise<void> {
   check(await a.signText(message, await a.importSigningKeyWithPassword(EncryptedData.fromBinary(EncryptedData.fromJWE(artifact.signingBackup).toBinary()), password)) === artifact.signature, 'signing backup');
 }
 export async function adversarial(): Promise<void> {
+  // Run before Ed25519 vectors so RSA is checked even on encryption-only providers.
+  const malformedRsa = { ...fixture.jwe.rsa, d: 'AQ', p: 'AQ', q: 'AQ', dp: 'AQ', dq: 'AQ', qi: 'AQ' };
+  try {
+    await a.importEncryptionKey(malformedRsa);
+    throw new Error('accepted unusable RSA private JWK');
+  } catch (error) { check(error instanceof InvalidKeyError, 'unusable RSA private JWK error'); }
   const f = fixture.ed25519;
   const hex = (value: string) => Uint8Array.from(value.match(/../g) ?? [], v => parseInt(v, 16));
   const encode = (value: Uint8Array) => btoa(String.fromCharCode(...value)).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
