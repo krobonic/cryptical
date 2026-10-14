@@ -3,6 +3,28 @@ import { EncryptedData, symmetric as s, asymmetric as a, DecryptionError, Invali
 import { b64, utf8, unb64, text, MAX_BYTES } from '../src/internal/encoding';
 import fixture from './fixtures/interop.json';
 
+test('JWE parsing rejects excessive delimiters within the input limit', () => {
+  expect(() => EncryptedData.fromJWE('.'.repeat(24 * 1024 * 1024))).toThrow(DecryptionError);
+});
+
+test('JWE parsing rejects extra segments after a valid envelope', () => {
+  for (const jwe of [fixture.jwe.dir, fixture.jwe.password, fixture.jwe.recipient]) {
+    for (const suffix of ['.', '.extra', '..', '.extra.more']) {
+      expect(() => EncryptedData.fromJWE(jwe + suffix)).toThrow(DecryptionError);
+    }
+  }
+});
+
+test('JWE parsing preserves and decrypts valid empty ciphertext', async () => {
+  const key = await s.generateKey(), input = new Uint8Array();
+  const jwe = (await s.encrypt(input, key)).toJWE();
+  expect(jwe.split('.')[3]).toBe('');
+  const parsed = EncryptedData.fromJWE(jwe);
+  expect(parsed.toJWE()).toBe(jwe);
+  expect(EncryptedData.fromBinary(parsed.toBinary()).toJWE()).toBe(jwe);
+  expect(await s.decrypt(parsed, key)).toEqual(input);
+});
+
 test('binary fixtures preserve exact JWE across all suites', async () => {
   for (const jwe of [fixture.jwe.dir, fixture.jwe.password, fixture.jwe.recipient]) {
     const data = EncryptedData.fromJWE(jwe), binary = data.toBinary();

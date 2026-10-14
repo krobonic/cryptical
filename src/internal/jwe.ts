@@ -23,7 +23,8 @@ export class EncryptedData {
     if (typeof value !== 'string') throw new InvalidArgumentError('Expected JWE string');
     return malformed(() => {
       if (value.length > 24 * 1024 * 1024) throw new DecryptionError();
-      const parts = value.split('.');
+      // Keep one extra segment to detect trailing data without unbounded allocation.
+      const parts = value.split('.', 6);
       if (parts.length !== 5) throw new DecryptionError();
       const [protectedHeader, wrapped, iv, ciphertext, tag] = parts as [string, string, string, string, string];
       const header = readHeader(protectedHeader);
