@@ -49,13 +49,18 @@ export async function importJwk(value: JsonWebKey, purpose: Purpose): Promise<Cr
     const { jwk, usages } = validate(value, purpose);
     if (purpose === 'signing') { await requireEd25519(); delete jwk.alg; } // Providers differ on EdDSA versus Ed25519 metadata.
     const algorithm = purpose === 'symmetric' ? { name: 'AES-GCM' } : purpose === 'signing' ? { name: 'Ed25519' } : { name: 'RSA-OAEP', hash: 'SHA-256' };
-    const key = await native(() => cryptoProvider().subtle.importKey('jwk', jwk, algorithm, true, usages), new InvalidKeyError('JWK import failed'));
-    if (purpose === 'signing' && key.type === 'private') {
-      // Some providers silently replace x with the public component derived from d.
+    if (purpose === 'signing' && jwk.d !== undefined) {
+      // Import only the seed so providers must derive x rather than retain an
+      // unchecked public component from the JWK. RFC 8410 PKCS#8, Ed25519 OID.
+      const pkcs8 = new Uint8Array(48);
+      pkcs8.set([0x30, 0x2e, 0x02, 0x01, 0x00, 0x30, 0x05, 0x06, 0x03, 0x2b, 0x65, 0x70, 0x04, 0x22, 0x04, 0x20]);
+      pkcs8.set(unb64(jwk.d, 32), 16);
+      const key = await native(() => cryptoProvider().subtle.importKey('pkcs8', pkcs8, algorithm, true, usages), new InvalidKeyError('JWK import failed'));
       const exported = await native(() => cryptoProvider().subtle.exportKey('jwk', key), new InvalidKeyError('JWK consistency check failed'));
       if (exported.x !== jwk.x) throw new InvalidKeyError('Inconsistent Ed25519 private JWK');
+      return key;
     }
-    return key;
+    return await native(() => cryptoProvider().subtle.importKey('jwk', jwk, algorithm, true, usages), new InvalidKeyError('JWK import failed'));
   } catch (error) {
     if (error instanceof CryptoUnavailableError) throw error;
     throw new InvalidKeyError('Invalid or incompatible JWK');
