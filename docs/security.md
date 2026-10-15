@@ -58,6 +58,10 @@ Actual Chrome/Edge, Safari/iOS Safari, mobile benchmarks, and independent review
 - Full Ubuntu 24.04 ARM64 container matrices passed on Node 22.23.3, 24.22.0 and 26.12.0 with Bun 1.4.2, Chromium 156.0.8078.12, Firefox 157.0 and WebKit 27.2: all 25 encryption and all 25 full API producer/consumer combinations per Node version. This is local container verification; hosted GitHub Actions and shipped Safari remain separate checks.
 - Ordinary suite: 47 passing tests, with the opt-in runtime test skipped. Type checks, build, package checks and frozen-lockfile installation passed.
 
+## macOS runtime verification, 2026-10-15
+
+User-reported local run with Bun 1.4.2, Node 22.14.0 and Playwright `1.65.0-alpha-2026-10-15`: Chromium 156.0.8078.12 passed adversarial vectors; Firefox 157.0 could not launch because it could not find its temporary profile directory; WebKit 27.2 failed the native Ed25519 signature checks. All 16 available encryption producer/consumer combinations and nine full API combinations passed. The full local runtime suite failed. Signing remains unavailable on this macOS WebKit provider and raises `CryptoUnavailableError`; the Linux WebKit results above do not supersede this limitation.
+
 ## Runtime and release gates
 
 Target Node 22.13+ on supported release lines; CI runs Node 22, 24, and 26 (26 is additionally a smoke target). Browsers require HTTPS or localhost and native AES-GCM, AES-KW, PBKDF2/SHA-512, RSA-OAEP/SHA-256 and Ed25519. Unsupported native algorithms raise CryptoUnavailableError; no polyfill, WASM, algorithm substitution, network discovery, or handwritten cryptography is used.
@@ -66,7 +70,7 @@ The automated runtime harness tests built JavaScript in Bun, actual Node and Pla
 
 Before production release, record all of the following:
 
-- CI success for each Node matrix entry and all browser engines.
+- Linux `verify` CI success for each Node matrix entry and all browser engines on the exact release commit. The local publish hook runs build, type, core-test and package checks; the full runtime suite runs in CI. Confirm CI success manually before publishing, since the local publish command does not query GitHub Actions. A passing Linux matrix does not establish signing support on affected macOS WebKit providers or replace the device and review gates below.
 - Current Chrome and Edge versions, actual macOS Safari and actual iOS Safari versions/device names; use the same harness over HTTPS, and exchange a note and protected key backup with Node in both directions.
 - On named desktop and mobile devices, warm up once, then run 10 password encryptions/decryptions and record median/max milliseconds. The harness exposes `benchmark()` and a button for this purpose.
 - 16 MiB success, over-limit rejection, no plaintext on authentication failure, and decryption of an earlier fixture.

@@ -1,6 +1,7 @@
 {
   "name": "cipherkit",
   "version": "0.1.0",
+  "license": "MIT",
   "description": "Portable native Web Crypto encryption and signatures",
   "type": "module",
   "sideEffects": false,
@@ -33,7 +34,11 @@
     "build": "bun scripts/build.ts && tsc -p tsconfig.build.json",
     "test": "bun test",
     "test:runtime": "bun run build && CIPHERKIT_RUNTIME=1 bun test tests/runtime.test.ts",
-    "check:package": "bun scripts/build.ts --check"
+    "check:package": "bun scripts/build.ts --check",
+    "prepack": "bun run build && bun run typecheck && bun test && bun run check:package",
+    "release:pack": "bun pm pack",
+    "release:dry-run": "bun publish --dry-run --access public",
+    "release": "bun publish --access public"
   },
   "devDependencies": {
     "@types/bun": "1.3.10",

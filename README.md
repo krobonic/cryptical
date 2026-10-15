@@ -5,7 +5,7 @@ A small TypeScript library for encryption and detached signatures using native W
 All cryptographic functions are asynchronous. Encrypted payload parsing and serialization are synchronous.
 
 > [!WARNING]
-> **Pre-release — not independently audited.** Production release requires an independent security review and completion of the runtime/device checks. See [security and release status](docs/security.md).
+> **EXPERIMENTAL pre-release — not independently audited.** Production release requires an independent security review and completion of the runtime/device checks. See [security and release status](docs/security.md).
 
 ## Contents
 
@@ -258,7 +258,7 @@ Decryption failures deliberately share the same error. Never use error timing as
 
 The target is Node **22.13+ on supported release lines** (CI targets Node 22, 24, and 26), plus modern Chrome/Edge, Firefox, Safari, and iOS Safari with the required native algorithms. Browsers require **HTTPS or localhost**. No cryptographic fallback is loaded.
 
-Support is conditional on the runtime test matrix passing. The recorded local macOS Playwright WebKit 26.6 run fails the required empty-message Ed25519 vector, so signing is explicitly unavailable on that provider and the full runtime release gate remains failing. Playwright WebKit does **not** establish support for shipped Safari.
+Support is conditional on the runtime test matrix passing. Recorded macOS Playwright WebKit 26.6 and 27.2 runs fail the required native Ed25519 signature checks, so signing is explicitly unavailable on those providers. Linux WebKit results do not establish macOS signing support. Playwright WebKit does **not** establish support for shipped Safari.
 
 CI pins Playwright `1.65.0-alpha-2026-10-15` because stable `1.64.1` still ships a Linux WebKit RSA-OAEP bug that drops leading zero bytes from decrypted content keys. The pinned build passes fixed leading-zero vectors. Move back to a stable Playwright release once it passes those vectors; see [runtime verification](docs/security.md).
 
@@ -305,6 +305,20 @@ bunx playwright install --with-deps chromium firefox webkit
 bun run test:runtime
 ```
 
-Ordinary `bun test` skips the runtime suite. `test:runtime` builds the JavaScript and tests it in actual Node subprocesses and browsers, exchanging artifacts between producers and consumers. The known WebKit signing failure above remains a release blocker.
+Ordinary `bun test` skips the runtime suite. `test:runtime` builds the JavaScript and tests it in actual Node subprocesses and browsers, exchanging artifacts between producers and consumers. Linux CI runs the full suite for every Node matrix entry. The known macOS WebKit signing failure above prevents claiming full support on that provider.
 
 For manual release checks and password benchmarks, see the [browser harness](tests/runtime/index.html) and [runtime and release gates](docs/security.md#runtime-and-release-gates).
+
+### Releasing with Bun
+
+Set the intended version in `package.json` and complete the release gates above. Before publishing, push the release commit and confirm that the `verify` GitHub Actions workflow passes all Linux Node 22, 24, and 26 jobs for that same commit, including the full browser runtime matrix. Publish from that tested checkout without further changes.
+
+```sh
+bun run release:pack     # Build, check, and create a local .tgz
+bun run release:dry-run  # Run publish checks and preview the package
+bun run release         # Publish the current version to npm
+```
+
+The `prepack` hook builds fresh output, checks types, runs the core tests, and validates package exports. It also applies when invoking `bun pm pack` or `bun publish` directly from this checkout. The full runtime suite is a Linux CI release gate, not a local publish hook; local publishing does not require Playwright browsers. The publish command does not query CI, so confirming the successful workflow for the release commit is a manual prerequisite. Publish from the checkout: publishing a prebuilt tarball skips lifecycle hooks.
+
+Bun loads `.env` automatically and uses `NPM_CONFIG_TOKEN` for npm authentication; no additional npm configuration is needed. Keep the token in the ignored `.env` file or the publishing environment. The package file allowlist excludes environment files. The dry run does not verify registry authentication or package-name availability. Releases use npm's default `latest` tag; pass `--tag next` when publishing a prerelease, for example `bun run release --tag next`.
