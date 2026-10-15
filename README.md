@@ -4,6 +4,7 @@ A small TypeScript library for encryption and detached signatures using native W
 
 All cryptographic functions are asynchronous. Encrypted payload parsing and serialization are synchronous.
 
+> [!WARNING]
 > **Pre-release — not independently audited.** Production release requires an independent security review and completion of the runtime/device checks. See [security and release status](docs/security.md).
 
 ## Contents
