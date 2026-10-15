@@ -4,6 +4,7 @@ import * as s from '../../src/symmetric.js';
 import * as a from '../../src/asymmetric.js';
 import type { EncryptionPublicKey, EncryptionPrivateKey, SigningPublicKey, SigningPrivateKey } from '../../src/types.js';
 import fixture from '../fixtures/interop.json';
+import leadingZeroFixture from '../fixtures/rsa-leading-zero.json';
 const message = '\ufeffnative interchange 世界 👩🏽‍💻\r\n', password = 'test only 密碼 🔐';
 function check(value: boolean, label: string): void { if (!value) throw new Error(label); }
 export interface Artifact {
@@ -41,49 +42,91 @@ export async function produce(): Promise<Artifact> {
   };
 }
 export async function consumeEncryption(artifact: EncryptionArtifact): Promise<void> {
-  const key = await s.importKey(artifact.symmetric), rsa = await a.importEncryptionKey(artifact.encryptionPrivate) as EncryptionPrivateKey;
-  const wrappingKey = await s.importKey(artifact.wrappingKey);
-  const publicKey = await a.importEncryptionKey(artifact.encryptionPublic) as EncryptionPublicKey;
-  for (const format of ['jwe', 'binary'] as const) {
-    const parse = (name: 'dir' | 'pbes' | 'rsa' | 'symmetricBackup' | 'encryptionBackup' | 'wrappedSymmetric' | 'wrappedEncryption' | 'sharedSymmetric' | 'sharedEncryption') => {
-      const data = format === 'jwe' ? EncryptedData.fromJWE(artifact[name]) : EncryptedData.fromBinary(new Uint8Array(artifact.binary[name]!));
-      check(data.toJWE() === artifact[name], 'exact JWE preservation');
-      return data;
-    };
-    check(await s.decryptText(parse('dir'), await s.unwrapKey(parse('sharedSymmetric'), wrappingKey, { purpose: 'symmetric' })) === message, 'shared symmetric key');
-    check(await a.decryptText(parse('rsa'), await s.unwrapKey(parse('sharedEncryption'), wrappingKey, { purpose: 'encryption' })) === message, 'shared encryption key');
-    const unwrappedSymmetric = await a.unwrapKey(parse('wrappedSymmetric'), rsa, { purpose: 'symmetric' });
-    const unwrappedEncryption = await a.unwrapKey(parse('wrappedEncryption'), rsa, { purpose: 'encryption' });
-    check(await s.decryptText(parse('dir'), unwrappedSymmetric) === message, 'wrapped symmetric key');
-    check(await a.decryptText(parse('rsa'), unwrappedEncryption) === message, 'wrapped encryption key');
-    check(await s.decryptText(parse('dir'), key) === message, 'dir');
-    check(await s.decryptTextWithPassword(parse('pbes'), password) === message, 'pbes');
-    check(await a.decryptText(parse('rsa'), rsa) === message, 'rsa');
-    check(await s.decryptText(parse('dir'), await s.importKeyWithPassword(parse('symmetricBackup'), password)) === message, 'symmetric backup');
-    check(await a.decryptText(parse('rsa'), await a.importEncryptionKeyWithPassword(parse('encryptionBackup'), password)) === message, 'RSA backup');
-  }
-  check(await a.decryptText(await a.encryptText(message, publicKey), rsa) === message, 'public JWK');
+  let operation = 'encryption JWK import';
+  try {
+    const key = await s.importKey(artifact.symmetric), rsa = await a.importEncryptionKey(artifact.encryptionPrivate) as EncryptionPrivateKey;
+    const wrappingKey = await s.importKey(artifact.wrappingKey);
+    const publicKey = await a.importEncryptionKey(artifact.encryptionPublic) as EncryptionPublicKey;
+    for (const format of ['jwe', 'binary'] as const) {
+      const parse = (name: 'dir' | 'pbes' | 'rsa' | 'symmetricBackup' | 'encryptionBackup' | 'wrappedSymmetric' | 'wrappedEncryption' | 'sharedSymmetric' | 'sharedEncryption') => {
+        const data = format === 'jwe' ? EncryptedData.fromJWE(artifact[name]) : EncryptedData.fromBinary(new Uint8Array(artifact.binary[name]!));
+        check(data.toJWE() === artifact[name], 'exact JWE preservation');
+        return data;
+      };
+      operation = 'shared symmetric key';
+      check(await s.decryptText(parse('dir'), await s.unwrapKey(parse('sharedSymmetric'), wrappingKey, { purpose: 'symmetric' })) === message, 'shared symmetric key');
+      operation = 'shared encryption key';
+      check(await a.decryptText(parse('rsa'), await s.unwrapKey(parse('sharedEncryption'), wrappingKey, { purpose: 'encryption' })) === message, 'shared encryption key');
+      operation = 'RSA-wrapped symmetric key';
+      const unwrappedSymmetric = await a.unwrapKey(parse('wrappedSymmetric'), rsa, { purpose: 'symmetric' });
+      operation = 'RSA-wrapped encryption key';
+      const unwrappedEncryption = await a.unwrapKey(parse('wrappedEncryption'), rsa, { purpose: 'encryption' });
+      operation = 'wrapped symmetric key';
+      check(await s.decryptText(parse('dir'), unwrappedSymmetric) === message, 'wrapped symmetric key');
+      operation = 'wrapped encryption key';
+      check(await a.decryptText(parse('rsa'), unwrappedEncryption) === message, 'wrapped encryption key');
+      operation = 'dir';
+      check(await s.decryptText(parse('dir'), key) === message, 'dir');
+      operation = 'pbes';
+      check(await s.decryptTextWithPassword(parse('pbes'), password) === message, 'pbes');
+      operation = 'rsa';
+      check(await a.decryptText(parse('rsa'), rsa) === message, 'rsa');
+      operation = 'symmetric backup';
+      check(await s.decryptText(parse('dir'), await s.importKeyWithPassword(parse('symmetricBackup'), password)) === message, 'symmetric backup');
+      operation = 'RSA backup';
+      check(await a.decryptText(parse('rsa'), await a.importEncryptionKeyWithPassword(parse('encryptionBackup'), password)) === message, 'RSA backup');
+    }
+    operation = 'public JWK';
+    check(await a.decryptText(await a.encryptText(message, publicKey), rsa) === message, 'public JWK');
+  } catch (error) { throw new Error(`${operation}: ${String(error)}`, { cause: error }); }
 }
+
 export async function consume(artifact: Artifact): Promise<void> {
-  await consumeEncryption(artifact);
-  const signer = await a.importSigningKey(artifact.signingPrivate) as SigningPrivateKey;
-  const verifier = await a.importSigningKey(artifact.signingPublic) as SigningPublicKey;
-  const recipient = await a.importEncryptionKey(artifact.encryptionPrivate) as EncryptionPrivateKey;
-  const sharedSigning = EncryptedData.fromJWE(artifact.sharedSigning);
-  for (const data of [sharedSigning, EncryptedData.fromBinary(sharedSigning.toBinary())]) {
-    const unwrapped = await s.unwrapKey(data, await s.importKey(artifact.wrappingKey), { purpose: 'signing' });
-    check(await a.signText(message, unwrapped) === artifact.signature, 'shared signing key');
+  let operation = 'encryption';
+  try {
+    await consumeEncryption(artifact);
+    operation = 'signing JWK import';
+    const signer = await a.importSigningKey(artifact.signingPrivate) as SigningPrivateKey;
+    const verifier = await a.importSigningKey(artifact.signingPublic) as SigningPublicKey;
+    const recipient = await a.importEncryptionKey(artifact.encryptionPrivate) as EncryptionPrivateKey;
+    operation = 'shared signing key';
+    const sharedSigning = EncryptedData.fromJWE(artifact.sharedSigning);
+    for (const [i, data] of [sharedSigning, EncryptedData.fromBinary(sharedSigning.toBinary())].entries()) {
+      operation = `shared signing key (${i === 0 ? 'JWE' : 'binary'})`;
+      const unwrapped = await s.unwrapKey(data, await s.importKey(artifact.wrappingKey), { purpose: 'signing' });
+      check(await a.signText(message, unwrapped) === artifact.signature, 'shared signing key');
+    }
+    operation = 'RSA-wrapped signing key';
+    const wrappedSigning = EncryptedData.fromJWE(artifact.wrappedSigning);
+    for (const [i, data] of [wrappedSigning, EncryptedData.fromBinary(wrappedSigning.toBinary())].entries()) {
+      operation = `RSA-wrapped signing key (${i === 0 ? 'JWE' : 'binary'})`;
+      const unwrapped = await a.unwrapKey(data, recipient, { purpose: 'signing' });
+      check(await a.signText(message, unwrapped) === artifact.signature, 'wrapped signing key');
+    }
+    operation = 'signature verification';
+    check(await a.verifyText(message, artifact.signature, verifier), 'signature');
+    operation = 'private signing JWK';
+    check(await a.signText(message, signer) === artifact.signature, 'private signing JWK');
+    operation = 'signing backup';
+    check(await a.signText(message, await a.importSigningKeyWithPassword(EncryptedData.fromBinary(EncryptedData.fromJWE(artifact.signingBackup).toBinary()), password)) === artifact.signature, 'signing backup');
+  } catch (error) { throw new Error(`${operation}: ${String(error)}`, { cause: error }); }
+}
+
+/** Fixed CEKs make WebKit/libgcrypt leading-zero truncation deterministic. */
+export async function rsaLeadingZeros(): Promise<void> {
+  // Import natively to isolate CEK preservation from the randomized RSA import check.
+  const key = await crypto.subtle.importKey('jwk', fixture.jwe.rsa, { name: 'RSA-OAEP', hash: 'SHA-256' }, true, ['decrypt']) as EncryptionPrivateKey;
+  for (const { leadingZeros, jwe } of leadingZeroFixture.vectors) {
+    const value = EncryptedData.fromJWE(jwe);
+    for (const [i, data] of [value, EncryptedData.fromBinary(value.toBinary())].entries()) {
+      const label = `RSA-OAEP CEK with ${leadingZeros} leading zero bytes (${i === 0 ? 'JWE' : 'binary'})`;
+      try { check(await a.decryptText(data, key) === leadingZeroFixture.message, label); }
+      catch (error) { throw new Error(`${label}: ${String(error)}`, { cause: error }); }
+    }
   }
-  const wrappedSigning = EncryptedData.fromJWE(artifact.wrappedSigning);
-  for (const data of [wrappedSigning, EncryptedData.fromBinary(wrappedSigning.toBinary())]) {
-    const unwrapped = await a.unwrapKey(data, recipient, { purpose: 'signing' });
-    check(await a.signText(message, unwrapped) === artifact.signature, 'wrapped signing key');
-  }
-  check(await a.verifyText(message, artifact.signature, verifier), 'signature');
-  check(await a.signText(message, signer) === artifact.signature, 'private signing JWK');
-  check(await a.signText(message, await a.importSigningKeyWithPassword(EncryptedData.fromBinary(EncryptedData.fromJWE(artifact.signingBackup).toBinary()), password)) === artifact.signature, 'signing backup');
 }
 export async function adversarial(): Promise<void> {
+  await rsaLeadingZeros();
   // Run before Ed25519 vectors so RSA is checked even on encryption-only providers.
   const malformedRsa = { ...fixture.jwe.rsa, d: 'AQ', p: 'AQ', q: 'AQ', dp: 'AQ', dq: 'AQ', qi: 'AQ' };
   try {

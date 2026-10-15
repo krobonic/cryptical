@@ -3,6 +3,7 @@ import { CompactEncrypt, compactDecrypt, importJWK } from 'jose';
 import { EncryptedData, symmetric as s, asymmetric as a } from '../index';
 import { b64, utf8, text, unb64 } from '../src/internal/encoding';
 import fixture from './fixtures/interop.json';
+import { rsaLeadingZeros } from './runtime/cases';
 import type { EncryptionPrivateKey, SigningPublicKey } from '../src/types';
 const password = 'portable password 密碼', message = '\ufeffinteroperable 🌍';
 const options = { keyManagementAlgorithms: ['PBES2-HS512+A256KW'], maxPBES2Count: 1000000 };
@@ -44,4 +45,8 @@ test('preserved independent encrypted fixtures', async () => {
   expect(await s.decryptText(EncryptedData.fromJWE(f.jwe.dir), key)).toBe(f.jwe.message);
   expect(await a.decryptText(EncryptedData.fromJWE(f.jwe.recipient), await a.importEncryptionKey(f.jwe.rsa) as EncryptionPrivateKey)).toBe(f.jwe.message);
   expect(await s.decryptTextWithPassword(EncryptedData.fromJWE(f.jwe.password), f.jwe.secret)).toBe(f.jwe.message);
+});
+
+test('RSA-OAEP preserves CEKs with one, multiple, or all leading zero bytes in JWE and binary', async () => {
+  await rsaLeadingZeros();
 });

@@ -48,6 +48,16 @@ Actual Chrome/Edge, Safari/iOS Safari, mobile benchmarks, and independent review
 - Symmetrically wrapped AES and RSA keys passed all 16 available Bun/Node/Chromium/WebKit producer/consumer combinations. Wrapped Ed25519 keys also passed the nine Bun/Node/Chromium full API combinations. The full runtime gate still fails on the existing Firefox profile launch error and WebKit Ed25519 vector failure.
 - Symmetric wrapping uses fresh random AES-GCM IVs under the wrapping key. Count these operations together with ordinary encryption when applying the direct-key rotation guidance above. A wrapping key may be nonextractable; the payload key must be extractable.
 
+## Linux RSA-OAEP regression, 2026-10-15
+
+- Reproduced the CI failure with Playwright 1.63.0 in Ubuntu 24.04 ARM64 containers: WebKit 26.6 failed to consume its own RSA-wrapped signing key while Bun, Node and the other browsers accepted it. A focused 1,000-wrap run produced five failures, each returning a 31-byte CEK instead of 32 bytes. Random content keys and random RSA import challenges explain why different Node matrix jobs can fail on different runs.
+- The upstream cause is [WebKit bug 326989](https://bugs.webkit.org/show_bug.cgi?id=326989), fixed in [WebKit commit f065a754](https://github.com/WebKit/WebKit/commit/f065a754d536c386e738c9a27259a08bcdd3f7e2): the libgcrypt backend read decrypted bytes as an integer, discarding leading zeros.
+- Added independent JOSE fixtures with 1, 2, 31 and 32 leading zero bytes in their 32-byte CEKs. Both compact JWE and binary forms run in the ordinary suite and every runtime's adversarial checks. Producer/consumer and operation labels now identify failures without logging key material.
+- Stable Playwright 1.64.1 / WebKit build 2370 still fails the first fixed vector. The test dependency is pinned to `1.65.0-alpha-2026-10-15`, whose WebKit build 2376 passes these vectors. Replace the prerelease pin with a stable release only after the same regression and full runtime matrix pass. The library retains its exact CEK-length validation and native-only cryptography.
+
+- Full Ubuntu 24.04 ARM64 container matrices passed on Node 22.23.3, 24.22.0 and 26.12.0 with Bun 1.4.2, Chromium 156.0.8078.12, Firefox 157.0 and WebKit 27.2: all 25 encryption and all 25 full API producer/consumer combinations per Node version. This is local container verification; hosted GitHub Actions and shipped Safari remain separate checks.
+- Ordinary suite: 47 passing tests, with the opt-in runtime test skipped. Type checks, build, package checks and frozen-lockfile installation passed.
+
 ## Runtime and release gates
 
 Target Node 22.13+ on supported release lines; CI runs Node 22, 24, and 26 (26 is additionally a smoke target). Browsers require HTTPS or localhost and native AES-GCM, AES-KW, PBKDF2/SHA-512, RSA-OAEP/SHA-256 and Ed25519. Unsupported native algorithms raise CryptoUnavailableError; no polyfill, WASM, algorithm substitution, network discovery, or handwritten cryptography is used.

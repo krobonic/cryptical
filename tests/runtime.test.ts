@@ -25,6 +25,14 @@ test.skipIf(process.env.CYPHERKIT_RUNTIME !== '1')('built JavaScript: every Bun/
   } });
   const browsers: Browser[] = [], pages: Page[] = [], signingPages: Page[] = [];
   const unsupported: string[] = [];
+  const producers = ['Bun', 'Node'], encryptionProducers = ['Bun', 'Node'];
+  const pageNames: string[] = [], signingPageNames: string[] = [];
+  async function consumeAll<T>(artifacts: T[], producers: string[], consumer: string, consume: (artifact: T) => Promise<unknown>): Promise<void> {
+    for (const [i, artifact] of artifacts.entries()) {
+      try { await consume(artifact); }
+      catch (error) { throw new Error(`${producers[i]} → ${consumer}: ${String(error)}`, { cause: error }); }
+    }
+  }
   try {
     await cases.adversarial();
     const artifacts: Artifact[] = [await cases.produce(), await node({ action: 'produce' }) as Artifact];
@@ -40,34 +48,40 @@ test.skipIf(process.env.CYPHERKIT_RUNTIME !== '1')('built JavaScript: every Bun/
       }
       browsers.push(browser);
       const page = await browser.newPage(); pages.push(page);
+      const name = `${engine.name()} ${browser.version()}`; pageNames.push(name);
       await page.goto(`http://127.0.0.1:${server.port}/tests/runtime/index.html`);
       await page.waitForFunction(() => !!(window as unknown as { cases: unknown }).cases);
       encryptionArtifacts.push(await page.evaluate(() => (window as unknown as { cases: typeof import('./runtime/cases') }).cases.produceEncryption()));
+      encryptionProducers.push(name);
       try {
         artifacts.push(await page.evaluate(async () => {
           const c = (window as unknown as { cases: typeof import('./runtime/cases') }).cases;
           await c.adversarial(); return c.produce();
         }));
-        signingPages.push(page);
+        signingPages.push(page); signingPageNames.push(name); producers.push(name);
         console.log(`${engine.name()} ${browser.version()}: produced and passed adversarial vectors`);
       } catch (error) {
         // Keep running encryption interchange, but fail the full-support gate below.
-        if (!String(error).includes('CryptoUnavailableError')) throw error;
+        if (!String(error).includes('CryptoUnavailableError')) throw new Error(`${name}: ${String(error)}`, { cause: error });
         unsupported.push(`${engine.name()} ${browser.version()}: ${String(error)}`);
         console.log(unsupported.at(-1));
       }
     }
-    for (const artifact of encryptionArtifacts) await cases.consumeEncryption(artifact);
-    expect(await node({ action: 'consumeEncryption', artifacts: encryptionArtifacts })).toBe(true);
-    for (const page of pages) await page.evaluate(async (artifacts) => {
-      for (const artifact of artifacts) await (window as unknown as { cases: typeof import('./runtime/cases') }).cases.consumeEncryption(artifact);
-    }, encryptionArtifacts);
+    await consumeAll(encryptionArtifacts, encryptionProducers, 'Bun encryption', cases.consumeEncryption);
+    await consumeAll(encryptionArtifacts, encryptionProducers, 'Node encryption', async artifact => {
+      expect(await node({ action: 'consumeEncryption', artifacts: [artifact] })).toBe(true);
+    });
+    for (const [i, page] of pages.entries()) await consumeAll(encryptionArtifacts, encryptionProducers, pageNames[i]!, artifact => page.evaluate(async artifact => {
+      await (window as unknown as { cases: typeof import('./runtime/cases') }).cases.consumeEncryption(artifact);
+    }, artifact));
     console.log(`Passed ${encryptionArtifacts.length ** 2} encryption/JWK/backup producer/consumer combinations`);
-    for (const artifact of artifacts) await cases.consume(artifact);
-    expect(await node({ action: 'consume', artifacts })).toBe(true);
-    for (const page of signingPages) await page.evaluate(async (artifacts) => {
-      for (const artifact of artifacts) await (window as unknown as { cases: typeof import('./runtime/cases') }).cases.consume(artifact);
-    }, artifacts);
+    await consumeAll(artifacts, producers, 'Bun', cases.consume);
+    await consumeAll(artifacts, producers, 'Node', async artifact => {
+      expect(await node({ action: 'consume', artifacts: [artifact] })).toBe(true);
+    });
+    for (const [i, page] of signingPages.entries()) await consumeAll(artifacts, producers, signingPageNames[i]!, artifact => page.evaluate(async artifact => {
+      await (window as unknown as { cases: typeof import('./runtime/cases') }).cases.consume(artifact);
+    }, artifact));
     console.log(`Passed ${artifacts.length ** 2} producer/consumer combinations`);
     console.log('Node password timing (ms):', await node({ action: 'benchmark' }));
     if (unsupported.length) throw new Error('Full runtime support gate failed:\n' + unsupported.join('\n'));

@@ -259,6 +259,8 @@ The target is Node **22.13+ on supported release lines** (CI targets Node 22, 24
 
 Support is conditional on the runtime test matrix passing. The recorded local macOS Playwright WebKit 26.6 run fails the required empty-message Ed25519 vector, so signing is explicitly unavailable on that provider and the full runtime release gate remains failing. Playwright WebKit does **not** establish support for shipped Safari.
 
+CI pins Playwright `1.65.0-alpha-2026-10-15` because stable `1.64.1` still ships a Linux WebKit RSA-OAEP bug that drops leading zero bytes from decrypted content keys. The pinned build passes fixed leading-zero vectors. Move back to a stable Playwright release once it passes those vectors; see [runtime verification](docs/security.md).
+
 See the [verification record and remaining release gates](docs/security.md#local-verification-record) for tested environments and outstanding device checks.
 
 ## Algorithms and limits
