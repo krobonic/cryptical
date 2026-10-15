@@ -1,7 +1,13 @@
-import { Symmetric } from './';
-export type BinaryLike = ArrayBuffer | ArrayBufferView;
+declare const purpose: unique symbol;
+export type SymmetricKey = CryptoKey & { readonly type: 'secret'; readonly [purpose]: 'symmetric' };
+export type EncryptionPublicKey = CryptoKey & { readonly type: 'public'; readonly [purpose]: 'encryption-public' };
+export type EncryptionPrivateKey = CryptoKey & { readonly type: 'private'; readonly [purpose]: 'encryption-private' };
+export type SigningPublicKey = CryptoKey & { readonly type: 'public'; readonly [purpose]: 'signing-public' };
+export type SigningPrivateKey = CryptoKey & { readonly type: 'private'; readonly [purpose]: 'signing-private' };
+export interface EncryptionKeyPair { publicKey: EncryptionPublicKey; privateKey: EncryptionPrivateKey }
+export interface SigningKeyPair { publicKey: SigningPublicKey; privateKey: SigningPrivateKey }
 
-export type Key =
-  | Symmetric.DataKey
-  | Symmetric.WrappingKey
-  | Symmetric.PasswordKey;
+/** Key material supported by symmetric and recipient wrapping. Public keys use ordinary JWK export. */
+export type WrappableKey = SymmetricKey | EncryptionPrivateKey | SigningPrivateKey;
+export type KeyPurpose = 'symmetric' | 'encryption' | 'signing';
+export type KeyForPurpose<P extends KeyPurpose> = P extends 'symmetric' ? SymmetricKey : P extends 'encryption' ? EncryptionPrivateKey : SigningPrivateKey;

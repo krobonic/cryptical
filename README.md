@@ -1,123 +1,324 @@
-# CypherKit
+# cipherkit
 
-A lightweight, TypeScript-first cryptography library built on top of the Web Crypto API. This library provides high-level abstractions for common cryptographic operations including symmetric encryption, asymmetric encryption, and key management.
+A small TypeScript library for encryption and detached signatures using native Web Crypto. It ships ESM JavaScript and TypeScript declarations, has zero runtime dependencies, and uses portable JWK keys and encrypted payloads with binary and standard compact JWE serialization.
+
+All cryptographic functions are asynchronous. Encrypted payload parsing and serialization are synchronous.
 
 > [!WARNING]
-> Very early development. The API is highly unstable and may change at any time. Features may be added or dropped at any time.
+> **EXPERIMENTAL pre-release — not independently audited.** Production release requires an independent security review and completion of the runtime/device checks. See [security and release status](docs/security.md).
 
-## Features
+## Contents
 
-- **Symmetric Encryption**: Easy-to-use AES-GCM encryption via `DataKey`.
-- **Key Wrapping**: Securely wrap and unwrap keys using AES-KW via `WrappingKey`.
-- **Password-Based Key Derivation**: Derive secure keys from passwords using PBKDF2 via `PasswordKey`.
-- **Asymmetric Encryption**: RSA-OAEP encryption and decryption via `KeyPair`.
-- **Type Safety**: Built with TypeScript for full type support and safety.
+- [Choose an operation](#choose-an-operation)
+- [Usage](#usage)
+- [Save and restore keys](#save-and-restore-keys)
+- [Byte APIs and encoding](#byte-apis-and-encoding)
+- [Errors](#errors)
+- [Runtime compatibility](#runtime-compatibility)
+- [Algorithms and limits](#algorithms-and-limits)
+- [Development](#development)
 
-## Installation
+## Choose an operation
 
-```bash
-npm install cypherkit
-```
+| Goal | API | What to retain |
+| --- | --- | --- |
+| Encrypt with a password | `symmetric.encryptTextWithPassword` | Ciphertext and password |
+| Encrypt with a generated shared key | `symmetric.encryptText` | Ciphertext and symmetric key |
+| Encrypt for one recipient | `asymmetric.encryptText` | Ciphertext; the recipient keeps their private key |
+| Sign a message | `asymmetric.signText` | Exact message, detached signature, and authenticated public signing key |
+
+Encryption returns an immutable `EncryptedData` object. Save its **entire binary envelope** with `.toBinary()` or its **entire JWE string** with `.toJWE()` to decrypt later. There is no recovery without the correct key or password.
 
 ## Usage
 
-### Symmetric Encryption
+Import both namespaces from the package root:
 
-Use `DataKey` for standard AES-GCM encryption and decryption.
-
-```typescript
-import { Symmetric, Text } from 'cipherkit';
-
-// Generate a new 256-bit AES-GCM key
-const dataKey = await Symmetric.DataKey.generate();
-
-// Encrypt data
-const secretMessage = "Hello, World!";
-const encrypted = await dataKey.encrypt(Text.encode(secretMessage));
-
-// Decrypt data
-const decryptedBytes = await dataKey.decrypt(encrypted);
-const decryptedMessage = Text.decode(decryptedBytes);
-
-console.log(decryptedMessage); // "Hello, World!"
+```ts
+import { symmetric, asymmetric } from 'cipherkit';
 ```
 
-### Password-Based Key Derivation
+Or import only the namespace you need:
 
-Derive a `DataKey` or `WrappingKey` from a user-provided password using PBKDF2.
-
-```typescript
-import { Symmetric } from 'cipherkit';
-
-const password = "my-secure-password";
-const passwordKey = await Symmetric.PasswordKey.import(password);
-
-// Derive a DataKey with a random salt
-const { salt, dataKey } = await passwordKey.deriveDataKey();
-
-// You can later re-derive the same key using the same salt
-const derivedAgain = await passwordKey.deriveDataKey(salt);
+```ts
+import * as symmetric from 'cipherkit/symmetric';
+import * as asymmetric from 'cipherkit/asymmetric';
 ```
 
-### Key Wrapping
+The examples below use these namespaces and top-level `await` in an ES module. Consumers use the published JavaScript and declarations; Bun and TypeScript are development tools only.
 
-Securely wrap keys for storage or transmission using `WrappingKey` (AES-KW).
+### Encrypt with a password
 
-```typescript
-import { Symmetric } from 'cipherkit';
+Use a strong, randomly generated passphrase. Anyone with the ciphertext can attempt to guess its password offline.
 
-const wrappingKey = await Symmetric.WrappingKey.generate();
-const dataKey = await Symmetric.DataKey.generate();
+```ts
+// Replace this example value with your own randomly generated passphrase.
+const password = 'use a randomly generated passphrase here';
+const encrypted = await symmetric.encryptTextWithPassword('Hello 🌍', password);
+const decrypted = await symmetric.decryptTextWithPassword(encrypted, password);
 
-// Wrap the DataKey
-const wrappedKeyBytes = await wrappingKey.wrapKey(dataKey);
-
-// Unwrap back to a DataKey
-const unwrappedDataKey = await wrappingKey.unwrapDataKey(wrappedKeyBytes);
+console.log(decrypted); // Hello 🌍
 ```
 
-### Asymmetric Encryption
+### Encrypt with a shared key
 
-Use `KeyPair` for RSA-OAEP asymmetric encryption.
+Generate a key once and keep it to decrypt later. Anyone holding the key can encrypt and decrypt messages with it.
 
-```typescript
-import { Asymmetric, Text } from 'cipherkit';
+```ts
+const key = await symmetric.generateKey();
+const encrypted = await symmetric.encryptText('Private note', key);
+const decrypted = await symmetric.decryptText(encrypted, key);
 
-// Generate a 4096-bit RSA-OAEP key pair
-const keyPair = await Asymmetric.KeyPair.generate();
-
-// Encrypt with the public key
-const secret = Text.encode("Top secret content");
-const encrypted = await keyPair.encrypt(secret);
-
-// Decrypt with the private key
-const decrypted = await keyPair.decrypt(encrypted);
-console.log(Text.decode(decrypted)); // "Top secret content"
+console.log(decrypted); // Private note
 ```
 
-### Text Utilities
+See [save and restore keys](#save-and-restore-keys) for portable key storage.
 
-The `Text` class provides simple wrappers for `TextEncoder` and `TextDecoder`.
+### Encrypt for a recipient
 
-```typescript
-import { Text } from 'cipherkit';
+Encrypt with the recipient's authenticated public encryption key. Only their private key can decrypt the message.
 
-const bytes = Text.encode("Hello");
-const str = Text.decode(bytes);
+```ts
+const recipient = await asymmetric.generateEncryptionKeyPair();
+const encrypted = await asymmetric.encryptText('For the recipient', recipient.publicKey);
+const decrypted = await asymmetric.decryptText(encrypted, recipient.privateKey);
+
+console.log(decrypted); // For the recipient
 ```
 
-## API Overview
+Recipient encryption alone does not identify the sender: anyone with the public key can encrypt to it.
 
-### Symmetric
-- `DataKey`: AES-GCM encryption/decryption.
-- `PasswordKey`: PBKDF2 key derivation from passwords.
-- `WrappingKey`: AES-KW key wrapping.
-- `EncryptedData`: Data structure for IV and ciphertext.
+### Sign and verify a message
 
-### Asymmetric
-- `KeyPair`: RSA-OAEP key pair generation, encryption, and decryption.
+Signing uses a **separate key pair** from encryption. Authenticate the public signing key independently before relying on a verification result.
 
-### Utilities
-- `Text`: Helper for string to/from Uint8Array conversion.
-- `Random`: Cryptographically strong random value generation.
-- `Helpers`: Internal conversion utilities.
+```ts
+const signer = await asymmetric.generateSigningKeyPair();
+const signature = await asymmetric.signText('Exact message', signer.privateKey);
+const valid = await asymmetric.verifyText('Exact message', signature, signer.publicKey);
+
+console.log(valid); // true
+```
+
+Signatures are detached: store or transmit the original message alongside its signature. Verification checks the exact message bytes.
+
+## Save and restore keys
+
+Ordinary exports return standard JWK objects. **Symmetric and private JWK exports contain unencrypted secrets.** Password-protected exports return `EncryptedData` objects; protected asymmetric exports accept only private keys.
+
+RSA private-key imports (including password restoration and both unwrapping methods) encrypt a fresh random 32-byte challenge with the supplied public components and decrypt it with the imported private key using native RSA-OAEP/SHA-256. The recovered bytes must match. This establishes usability on the active native provider, not full mathematical consistency of every private or CRT parameter; providers may ignore or recompute some parameters. Unusable ordinary imports raise `InvalidKeyError`; unusable protected payloads raise `DecryptionError`. Unavailable native algorithms retain `CryptoUnavailableError`. Public-only imports receive encoding and policy validation without this private-key check.
+
+Ordinary export, password backups, and both wrapping methods require payload keys whose usages exactly match the import policy: `encrypt`, `decrypt`, `wrapKey`, and `unwrapKey` for symmetric keys, `encrypt`/`wrapKey` or `decrypt`/`unwrapKey` for RSA public or private keys, and `verify` or `sign` for Ed25519 public or private keys. Unsupported payload usages raise `InvalidKeyError` before an export or backup is returned; permissions are never broadened. This restriction applies to the payload key. A symmetric wrapping key may still be nonextractable and permit only `wrapKey` for wrapping or only `unwrapKey` for unwrapping.
+
+This example exports a public encryption key and creates a protected backup of its private key:
+
+```ts
+const recipient = await asymmetric.generateEncryptionKeyPair();
+const password = 'use a randomly generated backup passphrase here';
+
+const publicJwk = await asymmetric.exportKey(recipient.publicKey);
+const importedPublic = await asymmetric.importEncryptionKey(publicJwk);
+
+const backup = await asymmetric.exportKeyWithPassword(recipient.privateKey, password);
+const savedBackup = backup.toJWE();
+const recoveredPrivate = await asymmetric.importEncryptionKeyWithPassword(
+  asymmetric.EncryptedData.fromJWE(savedBackup), password,
+);
+
+const encrypted = await asymmetric.encryptText('Recovered', importedPublic);
+console.log(await asymmetric.decryptText(encrypted, recoveredPrivate)); // Recovered
+```
+
+Both namespaces provide `exportKey(key)` and `exportKeyWithPassword(key, password)`. Choose the matching import function:
+
+| Key purpose | Import a JWK | Import a password-protected backup |
+| --- | --- | --- |
+| Symmetric | `symmetric.importKey(jwk)` | `symmetric.importKeyWithPassword(backup, password)` |
+| Recipient encryption | `asymmetric.importEncryptionKey(jwk)` | `asymmetric.importEncryptionKeyWithPassword(backup, password)` |
+| Signing | `asymmetric.importSigningKey(jwk)` | `asymmetric.importSigningKeyWithPassword(backup, password)` |
+
+Keys are branded native `CryptoKey` values with runtime checks. When importing a dynamically loaded asymmetric JWK, narrow the result with `key.type === 'public'` or `key.type === 'private'` before use.
+
+### Wrap a key for a recipient
+
+`asymmetric.wrapKey()` protects an extractable symmetric key, RSA encryption private key, or Ed25519 signing private key using the recipient's authenticated encryption public key. It returns `EncryptedData` for binary or JWE storage.
+
+```ts
+import { symmetric, asymmetric, EncryptedData } from 'cipherkit';
+
+const key = await symmetric.generateKey();
+const recipient = await asymmetric.generateEncryptionKeyPair();
+const wrapped = await asymmetric.wrapKey(key, recipient.publicKey);
+const saved = wrapped.toBinary(); // Or wrapped.toJWE()
+
+const restored = await asymmetric.unwrapKey(
+  EncryptedData.fromBinary(saved),
+  recipient.privateKey,
+  { purpose: 'symmetric' },
+); // SymmetricKey
+```
+
+The required `purpose` determines both runtime validation and the TypeScript return type:
+
+| Purpose | Returned key |
+| --- | --- |
+| `symmetric` | `SymmetricKey` (AES-256-GCM) |
+| `encryption` | `EncryptionPrivateKey` (RSA-OAEP) |
+| `signing` | `SigningPrivateKey` (Ed25519) |
+
+Private keys use the same calls: pass the private key to `wrapKey()` and its purpose to `unwrapKey()`. Public keys use ordinary JWK export. Nonextractable keys cannot be wrapped. Restored keys are extractable, following the existing import policy.
+
+Wrapping encrypts a bounded JWK payload with RSA-OAEP-256/AES-256-GCM and an authenticated key-content marker. Ordinary `decrypt()` rejects these envelopes; `unwrapKey()` rejects ordinary data envelopes, password backups, incompatible key material, and mismatched purposes. An invalid purpose option raises `InvalidArgumentError`; invalid key arguments raise `InvalidKeyError`; wrong recipients, tampering, and incompatible wrapped payloads raise `DecryptionError`.
+
+Anyone with the recipient's public key can produce a wrapped key for them; wrapping does not authenticate the sender. Use the password-protected export/import methods above when protecting a key with a password.
+
+### Wrap a key with a symmetric key
+
+`symmetric.wrapKey()` protects the same symmetric and private key types using an AES-256-GCM wrapping key. `symmetric.unwrapKey()` requires the expected purpose and returns the corresponding key type, just like recipient unwrapping.
+
+```ts
+const wrappingKey = await symmetric.generateKey();
+const key = await symmetric.generateKey();
+const wrapped = await symmetric.wrapKey(key, wrappingKey);
+
+const restored = await symmetric.unwrapKey(
+  symmetric.EncryptedData.fromBinary(wrapped.toBinary()),
+  wrappingKey,
+  { purpose: 'symmetric' },
+);
+```
+
+Use `purpose: 'encryption'` for an RSA private key or `'signing'` for an Ed25519 private key. Wrapped results also support `.toJWE()`. The payload key must be extractable; the wrapping key can be nonextractable and must permit `wrapKey` for wrapping or `unwrapKey` for unwrapping. Restored keys follow the existing extractable-key import policy.
+
+This uses an AES-GCM envelope with `alg: "dir"` and authenticated `cty: "jwk+json"`, with a fresh random IV on each wrap. It is not an AES-KW algorithm interface. Ordinary decryption rejects wrapped-key envelopes, and unwrapping rejects ordinary ciphertext or envelopes protected by a different wrapping mechanism. Keep the wrapping key separately protected. The existing direct-key IV rotation guidance counts wrapping and ordinary encryption operations together.
+
+## Byte APIs and encoding
+
+Use the text helpers for strings and the byte APIs for `Uint8Array` data:
+
+| Operation | Text API | Byte API |
+| --- | --- | --- |
+| Encrypt with a key, in either namespace | `encryptText(text, key)` | `encrypt(data, key)` |
+| Decrypt with a key, in either namespace | `decryptText(encrypted, key)` | `decrypt(encrypted, key)` |
+| Encrypt with a password, in `symmetric` | `encryptTextWithPassword(text, password)` | `encryptWithPassword(data, password)` |
+| Decrypt with a password, in `symmetric` | `decryptTextWithPassword(encrypted, password)` | `decryptWithPassword(encrypted, password)` |
+| Sign, in `asymmetric` | `signText(text, privateKey)` | `sign(data, privateKey)` |
+| Verify, in `asymmetric` | `verifyText(text, signature, publicKey)` | `verify(data, signature, publicKey)` |
+
+- Encryption always returns `EncryptedData`; decryption accepts that object. Parse stored data with `EncryptedData.fromBinary(bytes)` or `EncryptedData.fromJWE(string)` first. Text decryption returns a string; byte decryption returns `Uint8Array`.
+- Text signatures are unpadded base64url strings. Byte signatures are 64-byte Ed25519 signatures as `Uint8Array`. Verification returns a boolean.
+- Text helpers use exact UTF-8: no trimming or normalization, leading BOM preserved, and lone UTF-16 surrogates rejected.
+- Input byte views are copied before asynchronous work.
+
+### Serialization and object storage
+
+`EncryptedData` is available from the package root and both namespace subpaths. Its parsers validate the envelope structure and supported parameters; **only decryption authenticates it**. Conversion does not require keys or repeat encryption. Binary output uses a versioned Cipherkit format with raw ciphertext; JWE output uses standard base64url encoding and adds roughly 33% to ciphertext size. The exact authenticated protected header is preserved in both formats.
+
+```ts
+import { EncryptedData, symmetric } from 'cipherkit';
+
+const encrypted = await symmetric.encrypt(imageBytes, key);
+const binary = encrypted.toBinary(); // Uint8Array
+const jwe = encrypted.toJWE();       // compact JWE string
+
+// uploadUrl and downloadUrl are authorised object-storage URLs.
+const upload = await fetch(uploadUrl, {
+  method: 'PUT',
+  headers: { 'Content-Type': 'application/octet-stream' },
+  body: binary,
+});
+if (!upload.ok) throw new Error('Upload failed');
+
+const download = await fetch(downloadUrl);
+if (!download.ok) throw new Error('Download failed');
+const restored = EncryptedData.fromBinary(new Uint8Array(await download.arrayBuffer()));
+const originalBytes = await symmetric.decrypt(restored, key);
+
+// For text storage instead:
+const fromJwe = EncryptedData.fromJWE(jwe);
+```
+
+Retain the decryption key securely. Image filenames and MIME types are not automatically included; retain them separately or package them with the plaintext before encryption. A stored encrypted object must be decrypted before it can be displayed as an image. Objects hold no plaintext or secret keys, expose no mutable internal bytes, and return a fresh byte array for each `toBinary()` call. Serialize explicitly before storage or transport; JSON serialization of the object is not an envelope format.
+
+## Errors
+
+Error classes are exported from the package root and extend `CipherkitError`.
+
+| Condition | Result |
+| --- | --- |
+| Invalid or malformed signature | Verification returns `false` |
+| Wrong argument type | `InvalidArgumentError` |
+| Invalid key or key purpose | `InvalidKeyError` |
+| Required native algorithm unavailable | `CryptoUnavailableError` |
+| Wrong secret, malformed ciphertext, or authentication failure | `DecryptionError` |
+| Other encryption or signing/verification operation failure | `EncryptionError` or `SignatureError` |
+
+Decryption failures deliberately share the same error. Never use error timing as a secret-validation oracle.
+
+## Runtime compatibility
+
+The target is Node **22.13+ on supported release lines** (CI targets Node 22, 24, and 26), plus modern Chrome/Edge, Firefox, Safari, and iOS Safari with the required native algorithms. Browsers require **HTTPS or localhost**. No cryptographic fallback is loaded.
+
+Support is conditional on the runtime test matrix passing. Recorded macOS Playwright WebKit 26.6 and 27.2 runs fail the required native Ed25519 signature checks, so signing is explicitly unavailable on those providers. Linux WebKit results do not establish macOS signing support. Playwright WebKit does **not** establish support for shipped Safari.
+
+CI pins Playwright `1.65.0-alpha-2026-10-15` because stable `1.64.1` still ships a Linux WebKit RSA-OAEP bug that drops leading zero bytes from decrypted content keys. The pinned build passes fixed leading-zero vectors. Move back to a stable Playwright release once it passes those vectors; see [runtime verification](docs/security.md).
+
+See the [verification record and remaining release gates](docs/security.md#local-verification-record) for tested environments and outstanding device checks.
+
+## Algorithms and limits
+
+| Operation | Algorithm |
+| --- | --- |
+| Content encryption | AES-256-GCM with random 96-bit IVs |
+| Password encryption | PBES2-HS512+A256KW with 220,000 PBKDF2 iterations |
+| Recipient encryption | RSA-OAEP-256 with generated 3072-bit RSA keys and a fresh AES content key |
+| Detached signatures | Ed25519 |
+
+Identical plaintexts produce different ciphertexts. There are no algorithm, IV, salt, or iteration options.
+
+- Plaintext and signing input are limited to **16 MiB** per operation.
+- Passwords must contain **1–1024 UTF-8 bytes**.
+- Operations are one-shot: data is copied; choosing JWE serialization adds base64 storage overhead. Streaming is not supported.
+- Authenticated encryption detects changes. The library supplies no secure-messaging protocol, replay prevention, or forward secrecy.
+
+See [wire format and migration examples](docs/format.md) for serialization and import rules, and [security responsibilities](docs/security.md#responsibilities-and-threat-model) for key storage, rotation, and application safeguards.
+
+Native `subtle.wrapKey()` and `subtle.unwrapKey()` perform symmetric AES-GCM wrapping and RSA-OAEP protection of content-encryption keys. Recipient encryption also requires `wrapKey` on its RSA public key and `unwrapKey` on its private key. General-purpose generated keys include these usages; explicit restricted JWK usages are rejected rather than broadened. Nonextractable wrapping keys with the required usages are supported. Temporary AES-GCM content keys have only encrypt/decrypt or wrapKey/unwrapKey as needed. Password operations retain their native AES-KW content-key wrapping and existing JWK validation.
+
+Native wrapping does **not** mean key material never enters JavaScript. Payload exports are validated before native JWK wrapping. On unwrap, direct native JWK import could discard invalid metadata or normalize inconsistent material. Instead, native raw unwrapping imports the authenticated payload into an extractable temporary HMAC/SHA-256 carrier (with only the required `sign` usage, never used for signing); raw export recovers the original bounded JSON bytes for the strict library import checks. This preserves metadata, material, expected-purpose, RSA usability, and Ed25519 seed/public consistency validation. Restored payload keys remain extractable. The JWE header, AES-GCM IV and authentication tag structure are unchanged.
+
+## Development
+
+From a checkout, install development dependencies with Bun, then check types, build, and run the core tests:
+
+```sh
+bun install --frozen-lockfile
+bun run typecheck
+bun run build
+bun test
+bun run check:package
+```
+
+Run the cross-runtime suite separately:
+
+```sh
+bunx playwright install --with-deps chromium firefox webkit
+bun run test:runtime
+```
+
+Ordinary `bun test` skips the runtime suite. `test:runtime` builds the JavaScript and tests it in actual Node subprocesses and browsers, exchanging artifacts between producers and consumers. Linux CI runs the full suite for every Node matrix entry. The known macOS WebKit signing failure above prevents claiming full support on that provider.
+
+For manual release checks and password benchmarks, see the [browser harness](tests/runtime/index.html) and [runtime and release gates](docs/security.md#runtime-and-release-gates).
+
+### Releasing with Bun
+
+Set the intended version in `package.json` and complete the release gates above. Before publishing, push the release commit and confirm that the `verify` GitHub Actions workflow passes all Linux Node 22, 24, and 26 jobs for that same commit, including the full browser runtime matrix. Publish from that tested checkout without further changes.
+
+```sh
+bun run release:pack     # Build, check, and create a local .tgz
+bun run release:dry-run  # Run publish checks and preview the package
+bun run release         # Publish the current version to npm
+```
+
+The `prepack` hook builds fresh output, checks types, runs the core tests, and validates package exports. It also applies when invoking `bun pm pack` or `bun publish` directly from this checkout. The full runtime suite is a Linux CI release gate, not a local publish hook; local publishing does not require Playwright browsers. The publish command does not query CI, so confirming the successful workflow for the release commit is a manual prerequisite. Publish from the checkout: publishing a prebuilt tarball skips lifecycle hooks.
+
+Bun loads `.env` automatically and uses `NPM_CONFIG_TOKEN` for npm authentication; no additional npm configuration is needed. Keep the token in the ignored `.env` file or the publishing environment. The package file allowlist excludes environment files. The dry run does not verify registry authentication or package-name availability. Releases use npm's default `latest` tag; pass `--tag next` when publishing a prerelease, for example `bun run release --tag next`.
