@@ -1,5 +1,5 @@
 {
-  "name": "cipherkit",
+  "name": "cryptical",
   "version": "0.1.0",
   "license": "MIT",
   "description": "Portable native Web Crypto encryption and signatures",
@@ -33,7 +33,7 @@
     "typecheck": "tsc --noEmit && tsc -p tsconfig.build.json && tsc -p tsconfig.test.json && tsc -p tsconfig.consumer.json",
     "build": "bun scripts/build.ts && tsc -p tsconfig.build.json",
     "test": "bun test",
-    "test:runtime": "bun run build && CIPHERKIT_RUNTIME=1 bun test tests/runtime.test.ts",
+    "test:runtime": "bun run build && CRYPTICAL_RUNTIME=1 bun test tests/runtime.test.ts",
     "check:package": "bun scripts/build.ts --check",
     "prepack": "bun run build && bun run typecheck && bun test && bun run check:package",
     "release:pack": "bun pm pack",
