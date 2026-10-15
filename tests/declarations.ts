@@ -1,7 +1,7 @@
 // Compile-only declaration consumer. Package self-references resolve published exports.
-import { EncryptedData, asymmetric as a, symmetric as s } from 'cipherkit';
-import * as symmetric from 'cipherkit/symmetric';
-import * as asymmetric from 'cipherkit/asymmetric';
+import { EncryptedData, asymmetric as a, symmetric as s } from 'cryptical';
+import * as symmetric from 'cryptical/symmetric';
+import * as asymmetric from 'cryptical/asymmetric';
 async function consumer() {
   const parsed = EncryptedData.fromBinary(new Uint8Array());
   const encoded: string = parsed.toJWE();

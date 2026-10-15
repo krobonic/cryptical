@@ -10,7 +10,7 @@ async function node(request: unknown): Promise<unknown> {
   if (code !== 0) throw new Error(error);
   return JSON.parse(output);
 }
-test.skipIf(process.env.CIPHERKIT_RUNTIME !== '1')('built JavaScript: every Bun/Node/Chromium/Firefox/WebKit producer → every consumer', async () => {
+test.skipIf(process.env.CRYPTICAL_RUNTIME !== '1')('built JavaScript: every Bun/Node/Chromium/Firefox/WebKit producer → every consumer', async () => {
   const build = await Bun.build({ entrypoints: ['tests/runtime/cases.ts'], outdir: 'tests/.generated', target: 'browser', format: 'esm', plugins: [{ name: 'built-library', setup(build) {
     build.onResolve({ filter: /^\.\.\/\.\.\/(index|src\/(symmetric|asymmetric))\.js$/ }, ({ path }) => ({ path: path.replace('../../', '../../dist/'), external: true }));
   } }] });

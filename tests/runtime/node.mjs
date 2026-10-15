@@ -1,6 +1,6 @@
-import { symmetric } from 'cipherkit';
-import * as subpath from 'cipherkit/symmetric';
-import * as asymmetric from 'cipherkit/asymmetric';
+import { symmetric } from 'cryptical';
+import * as subpath from 'cryptical/symmetric';
+import * as asymmetric from 'cryptical/asymmetric';
 if (symmetric.encrypt !== subpath.encrypt || typeof asymmetric.sign !== 'function') throw new Error('Package exports failed');
 import { produce, consume, produceEncryption, consumeEncryption, adversarial, benchmark } from '../.generated/cases.js';
 let input = '';
