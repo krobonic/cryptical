@@ -115,7 +115,7 @@ export async function consume(artifact: Artifact): Promise<void> {
 /** Fixed CEKs make WebKit/libgcrypt leading-zero truncation deterministic. */
 export async function rsaLeadingZeros(): Promise<void> {
   // Import natively to isolate CEK preservation from the randomized RSA import check.
-  const key = await crypto.subtle.importKey('jwk', fixture.jwe.rsa, { name: 'RSA-OAEP', hash: 'SHA-256' }, true, ['decrypt']) as EncryptionPrivateKey;
+  const key = await crypto.subtle.importKey('jwk', fixture.jwe.rsa, { name: 'RSA-OAEP', hash: 'SHA-256' }, false, ['unwrapKey']) as EncryptionPrivateKey;
   for (const { leadingZeros, jwe } of leadingZeroFixture.vectors) {
     const value = EncryptedData.fromJWE(jwe);
     for (const [i, data] of [value, EncryptedData.fromBinary(value.toBinary())].entries()) {

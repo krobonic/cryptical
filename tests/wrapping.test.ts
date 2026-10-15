@@ -83,11 +83,11 @@ test('JOSE interoperability includes validation of decrypted key material', asyn
   const publicPayload = await produce(utf8(JSON.stringify(await a.exportKey(other.publicKey))));
   await expect(a.unwrapKey(publicPayload, recipient.privateKey, { purpose: 'encryption' })).rejects.toBeInstanceOf(DecryptionError);
   const oversized = await new CompactEncrypt(new Uint8Array(32769)).setProtectedHeader({ alg: 'RSA-OAEP-256', enc: 'A256GCM', cty: 'jwk+json' }).encrypt(publicKey);
-  const decrypt = spyOn(crypto.subtle, 'decrypt');
+  const unwrap = spyOn(crypto.subtle, 'unwrapKey');
   try {
     expect(() => EncryptedData.fromJWE(oversized)).toThrow(DecryptionError);
-    expect(decrypt).not.toHaveBeenCalled();
-  } finally { decrypt.mockRestore(); }
+    expect(unwrap).not.toHaveBeenCalled();
+  } finally { unwrap.mockRestore(); }
 });
 
 test('unwrap snapshots the expected purpose before asynchronous decryption', async () => {

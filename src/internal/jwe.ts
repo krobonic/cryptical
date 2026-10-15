@@ -107,3 +107,21 @@ export async function seal(data: Uint8Array<ArrayBuffer>, key: CryptoKey, header
 export async function open(envelope: Envelope, key: CryptoKey): Promise<Uint8Array<ArrayBuffer>> {
   return new Uint8Array(await cryptoProvider().subtle.decrypt({ name: 'AES-GCM', iv: envelope.iv, additionalData: utf8(envelope.protected), tagLength: 128 }, key, envelope.content));
 }
+
+/** Native JWK wrapping retains the same authenticated GCM envelope as seal. */
+export async function sealKey(payload: CryptoKey, key: CryptoKey, header: Header, wrapped = new Uint8Array(0)): Promise<EncryptedData> {
+  const protectedHeader = b64(utf8(JSON.stringify(header))), iv = random(12);
+  const content = new Uint8Array(await native(() => cryptoProvider().subtle.wrapKey('jwk', payload, key,
+    { name: 'AES-GCM', iv, additionalData: utf8(protectedHeader), tagLength: 128 }), new EncryptionError('Key wrapping failed')));
+  return create(validate({ header: { ...header }, protected: protectedHeader, encryptedKey: new Uint8Array(wrapped), iv, content }));
+}
+/** Preserve the original JWK bytes: native JWK import can erase invalid metadata. */
+export async function openKey(envelope: Envelope, key: CryptoKey): Promise<Uint8Array<ArrayBuffer>> {
+  // HMAC accepts arbitrary nonempty bytes. This temporary carrier is never used
+  // to sign; exporting it allows the stricter library parser to validate every
+  // original field, including Ed25519 x/d consistency and RSA usability.
+  const carrier = await cryptoProvider().subtle.unwrapKey('raw', envelope.content, key,
+    { name: 'AES-GCM', iv: envelope.iv, additionalData: utf8(envelope.protected), tagLength: 128 },
+    { name: 'HMAC', hash: 'SHA-256' }, true, ['sign']);
+  return new Uint8Array(await cryptoProvider().subtle.exportKey('raw', carrier));
+}

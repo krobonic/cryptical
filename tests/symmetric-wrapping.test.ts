@@ -32,7 +32,7 @@ test('symmetric wrapping restores all key types from binary and JWE', async () =
 });
 
 test('validates payloads, wrapping key usages and options; allows nonextractable wrapping keys', async () => {
-  const hidden = await crypto.subtle.generateKey({ name: 'AES-GCM', length: 256 }, false, ['encrypt', 'decrypt']) as SymmetricKey;
+  const hidden = await crypto.subtle.generateKey({ name: 'AES-GCM', length: 256 }, false, ['wrapKey', 'unwrapKey']) as SymmetricKey;
   const wrapped = await s.wrapKey(secret, hidden);
   expect(await s.exportKey(await s.unwrapKey(wrapped, hidden, { purpose: 'symmetric' }))).toEqual(await s.exportKey(secret));
   for (const key of [hidden, rsa.publicKey, signer.publicKey, null, {}]) await expect(s.wrapKey(key as never, kek)).rejects.toBeInstanceOf(InvalidKeyError);
@@ -47,7 +47,7 @@ test('validates payloads, wrapping key usages and options; allows nonextractable
   expect((await pending).type).toBe('secret');
 });
 
-for (const usages of [['encrypt'], ['decrypt'], ['encrypt', 'decrypt', 'wrapKey']] as KeyUsage[][]) {
+for (const usages of [['encrypt', 'decrypt'], ['encrypt'], ['decrypt'], ['encrypt', 'decrypt', 'wrapKey']] as KeyUsage[][]) {
   test(`export paths reject symmetric payload usages ${usages.join(', ')}`, async () => {
     const key = await crypto.subtle.generateKey({ name: 'AES-GCM', length: 256 }, true, usages) as SymmetricKey;
     const jwk = await crypto.subtle.exportKey('jwk', key);
@@ -62,8 +62,8 @@ for (const usages of [['encrypt'], ['decrypt'], ['encrypt', 'decrypt', 'wrapKey'
 
 test('restricted nonextractable wrapping keys can wrap and unwrap valid payloads', async () => {
   const raw = await crypto.subtle.exportKey('raw', kek);
-  const encryptOnly = await crypto.subtle.importKey('raw', raw, 'AES-GCM', false, ['encrypt']) as SymmetricKey;
-  const decryptOnly = await crypto.subtle.importKey('raw', raw, 'AES-GCM', false, ['decrypt']) as SymmetricKey;
+  const encryptOnly = await crypto.subtle.importKey('raw', raw, 'AES-GCM', false, ['wrapKey']) as SymmetricKey;
+  const decryptOnly = await crypto.subtle.importKey('raw', raw, 'AES-GCM', false, ['unwrapKey']) as SymmetricKey;
   const wrapped = await s.wrapKey(secret, encryptOnly);
   const restored = await s.unwrapKey(wrapped, decryptOnly, { purpose: 'symmetric' });
   expect(await s.exportKey(restored)).toEqual(await s.exportKey(secret));
@@ -101,9 +101,9 @@ test('independent JOSE interoperates and invalid protected JWKs are rejected', a
   const publicPayload = EncryptedData.fromJWE(await produce(utf8(JSON.stringify(await a.exportKey(rsa.publicKey)))));
   await expect(s.unwrapKey(publicPayload, kek, { purpose: 'encryption' })).rejects.toBeInstanceOf(DecryptionError);
   const oversized = await produce(new Uint8Array(32769));
-  const decrypt = spyOn(crypto.subtle, 'decrypt');
+  const unwrap = spyOn(crypto.subtle, 'unwrapKey');
   try {
     expect(() => EncryptedData.fromJWE(oversized)).toThrow(DecryptionError);
-    expect(decrypt).not.toHaveBeenCalled();
-  } finally { decrypt.mockRestore(); }
+    expect(unwrap).not.toHaveBeenCalled();
+  } finally { unwrap.mockRestore(); }
 });

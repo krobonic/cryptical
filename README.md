@@ -107,7 +107,7 @@ Ordinary exports return standard JWK objects. **Symmetric and private JWK export
 
 RSA private-key imports (including password restoration and both unwrapping methods) encrypt a fresh random 32-byte challenge with the supplied public components and decrypt it with the imported private key using native RSA-OAEP/SHA-256. The recovered bytes must match. This establishes usability on the active native provider, not full mathematical consistency of every private or CRT parameter; providers may ignore or recompute some parameters. Unusable ordinary imports raise `InvalidKeyError`; unusable protected payloads raise `DecryptionError`. Unavailable native algorithms retain `CryptoUnavailableError`. Public-only imports receive encoding and policy validation without this private-key check.
 
-Ordinary export, password backups, and both wrapping methods require payload keys whose usages exactly match the import policy: `encrypt` and `decrypt` for symmetric keys, `encrypt` or `decrypt` for RSA public or private keys, and `verify` or `sign` for Ed25519 public or private keys. Unsupported payload usages raise `InvalidKeyError` before an export or backup is returned; permissions are never broadened. This restriction applies to the payload key. A symmetric wrapping key may still be nonextractable and permit only `encrypt` for wrapping or only `decrypt` for unwrapping.
+Ordinary export, password backups, and both wrapping methods require payload keys whose usages exactly match the import policy: `encrypt`, `decrypt`, `wrapKey`, and `unwrapKey` for symmetric keys, `encrypt`/`wrapKey` or `decrypt`/`unwrapKey` for RSA public or private keys, and `verify` or `sign` for Ed25519 public or private keys. Unsupported payload usages raise `InvalidKeyError` before an export or backup is returned; permissions are never broadened. This restriction applies to the payload key. A symmetric wrapping key may still be nonextractable and permit only `wrapKey` for wrapping or only `unwrapKey` for unwrapping.
 
 This example exports a public encryption key and creates a protected backup of its private key:
 
@@ -187,7 +187,7 @@ const restored = await symmetric.unwrapKey(
 );
 ```
 
-Use `purpose: 'encryption'` for an RSA private key or `'signing'` for an Ed25519 private key. Wrapped results also support `.toJWE()`. The payload key must be extractable; the wrapping key can be nonextractable and must permit `encrypt` for wrapping or `decrypt` for unwrapping. Restored keys follow the existing extractable-key import policy.
+Use `purpose: 'encryption'` for an RSA private key or `'signing'` for an Ed25519 private key. Wrapped results also support `.toJWE()`. The payload key must be extractable; the wrapping key can be nonextractable and must permit `wrapKey` for wrapping or `unwrapKey` for unwrapping. Restored keys follow the existing extractable-key import policy.
 
 This uses an AES-GCM envelope with `alg: "dir"` and authenticated `cty: "jwk+json"`, with a fresh random IV on each wrap. It is not an AES-KW algorithm interface. Ordinary decryption rejects wrapped-key envelopes, and unwrapping rejects ordinary ciphertext or envelopes protected by a different wrapping mechanism. Keep the wrapping key separately protected. The existing direct-key IV rotation guidance counts wrapping and ordinary encryption operations together.
 
@@ -281,6 +281,10 @@ Identical plaintexts produce different ciphertexts. There are no algorithm, IV, 
 - Authenticated encryption detects changes. The library supplies no secure-messaging protocol, replay prevention, or forward secrecy.
 
 See [wire format and migration examples](docs/format.md) for serialization and import rules, and [security responsibilities](docs/security.md#responsibilities-and-threat-model) for key storage, rotation, and application safeguards.
+
+Native `subtle.wrapKey()` and `subtle.unwrapKey()` perform symmetric AES-GCM wrapping and RSA-OAEP protection of content-encryption keys. Recipient encryption also requires `wrapKey` on its RSA public key and `unwrapKey` on its private key. General-purpose generated keys include these usages; explicit restricted JWK usages are rejected rather than broadened. Nonextractable wrapping keys with the required usages are supported. Temporary AES-GCM content keys have only encrypt/decrypt or wrapKey/unwrapKey as needed. Password operations retain their native AES-KW content-key wrapping and existing JWK validation.
+
+Native wrapping does **not** mean key material never enters JavaScript. Payload exports are validated before native JWK wrapping. On unwrap, direct native JWK import could discard invalid metadata or normalize inconsistent material. Instead, native raw unwrapping imports the authenticated payload into an extractable temporary HMAC/SHA-256 carrier (with only the required `sign` usage, never used for signing); raw export recovers the original bounded JSON bytes for the strict library import checks. This preserves metadata, material, expected-purpose, RSA usability, and Ed25519 seed/public consistency validation. Restored payload keys remain extractable. The JWE header, AES-GCM IV and authentication tag structure are unchanged.
 
 ## Development
 

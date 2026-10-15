@@ -3,7 +3,7 @@ import { CompactEncrypt } from 'jose';
 import { asymmetric as a, symmetric as s, EncryptedData, InvalidKeyError, DecryptionError, CryptoUnavailableError } from '../index';
 
 for (const modulusLength of [3072, 4096]) test(`RSA ${modulusLength} imports reject unusable material and restore valid keys through every path`, async () => {
-  const pair = await crypto.subtle.generateKey({ name: 'RSA-OAEP', modulusLength, publicExponent: new Uint8Array([1, 0, 1]), hash: 'SHA-256' }, true, ['encrypt', 'decrypt']);
+  const pair = await crypto.subtle.generateKey({ name: 'RSA-OAEP', modulusLength, publicExponent: new Uint8Array([1, 0, 1]), hash: 'SHA-256' }, true, ['encrypt', 'decrypt', 'wrapKey', 'unwrapKey']);
   const jwk = await crypto.subtle.exportKey('jwk', pair.privateKey);
   const wrappingKey = await s.generateKey(), recipient = await a.generateEncryptionKeyPair();
   const password = 'test password', challenge = crypto.getRandomValues(new Uint8Array(32));

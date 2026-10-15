@@ -11,7 +11,7 @@ function validate(value: JsonWebKey, purpose: Purpose): { jwk: JsonWebKey; usage
   utf8(serialized, MAX_JWK);
   const jwk: JsonWebKey = JSON.parse(serialized);
   const privateKey = Object.hasOwn(jwk, 'd');
-  const usages: KeyUsage[] = purpose === 'symmetric' ? ['encrypt', 'decrypt'] : purpose === 'encryption' ? [privateKey ? 'decrypt' : 'encrypt'] : [privateKey ? 'sign' : 'verify'];
+  const usages: KeyUsage[] = purpose === 'symmetric' ? ['encrypt', 'decrypt', 'wrapKey', 'unwrapKey'] : purpose === 'encryption' ? (privateKey ? ['decrypt', 'unwrapKey'] : ['encrypt', 'wrapKey']) : [privateKey ? 'sign' : 'verify'];
   const alg = purpose === 'symmetric' ? 'A256GCM' : purpose === 'encryption' ? 'RSA-OAEP-256' : 'EdDSA';
   if ((jwk.alg !== undefined && jwk.alg !== alg && !(purpose === 'signing' && jwk.alg === 'Ed25519')) || (jwk.use !== undefined && jwk.use !== (purpose === 'signing' ? 'sig' : 'enc')) || (jwk.ext !== undefined && jwk.ext !== true)) throw new InvalidKeyError('Incompatible JWK metadata');
   if (jwk.key_ops !== undefined && (!Array.isArray(jwk.key_ops) || new Set(jwk.key_ops).size !== jwk.key_ops.length || jwk.key_ops.length !== usages.length || jwk.key_ops.some(v => !usages.includes(v as KeyUsage)))) throw new InvalidKeyError('Incompatible JWK usages');
