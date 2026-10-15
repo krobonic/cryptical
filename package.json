@@ -1,5 +1,5 @@
 {
-  "name": "cypherkit2",
+  "name": "cipherkit",
   "version": "0.1.0",
   "description": "Portable native Web Crypto encryption and signatures",
   "type": "module",
@@ -32,7 +32,7 @@
     "typecheck": "tsc --noEmit && tsc -p tsconfig.build.json && tsc -p tsconfig.test.json && tsc -p tsconfig.consumer.json",
     "build": "bun scripts/build.ts && tsc -p tsconfig.build.json",
     "test": "bun test",
-    "test:runtime": "bun run build && CYPHERKIT_RUNTIME=1 bun test tests/runtime.test.ts",
+    "test:runtime": "bun run build && CIPHERKIT_RUNTIME=1 bun test tests/runtime.test.ts",
     "check:package": "bun scripts/build.ts --check"
   },
   "devDependencies": {

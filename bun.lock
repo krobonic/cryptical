@@ -3,7 +3,7 @@
   "configVersion": 1,
   "workspaces": {
     "": {
-      "name": "cypherkit2",
+      "name": "cipherkit",
       "devDependencies": {
         "@types/bun": "1.3.10",
         "jose": "6.1.3",

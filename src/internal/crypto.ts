@@ -1,13 +1,13 @@
-import { CryptoUnavailableError, CypherkitError, DecryptionError, InvalidKeyError } from '../errors.js';
+import { CryptoUnavailableError, CipherkitError, DecryptionError, InvalidKeyError } from '../errors.js';
 export function cryptoProvider(): Crypto {
   if (!globalThis.crypto?.subtle || !globalThis.crypto.getRandomValues) throw new CryptoUnavailableError('Native Web Crypto requires a supported secure context');
   return globalThis.crypto;
 }
 export function random(size: number): Uint8Array<ArrayBuffer> { return cryptoProvider().getRandomValues(new Uint8Array(size)); }
-export async function native<T>(operation: () => Promise<T>, failure: CypherkitError): Promise<T> {
+export async function native<T>(operation: () => Promise<T>, failure: CipherkitError): Promise<T> {
   try { return await operation(); }
   catch (error) {
-    if (error instanceof CypherkitError) throw error;
+    if (error instanceof CipherkitError) throw error;
     if (error instanceof Error && error.name === 'NotSupportedError') throw new CryptoUnavailableError('Required native algorithm unavailable');
     throw failure;
   }

@@ -1,4 +1,4 @@
-# cypherkit2
+# cipherkit
 
 A small TypeScript library for encryption and detached signatures using native Web Crypto. It ships ESM JavaScript and TypeScript declarations, has zero runtime dependencies, and uses portable JWK keys and encrypted payloads with binary and standard compact JWE serialization.
 
@@ -34,14 +34,14 @@ Encryption returns an immutable `EncryptedData` object. Save its **entire binary
 Import both namespaces from the package root:
 
 ```ts
-import { symmetric, asymmetric } from 'cypherkit2';
+import { symmetric, asymmetric } from 'cipherkit';
 ```
 
 Or import only the namespace you need:
 
 ```ts
-import * as symmetric from 'cypherkit2/symmetric';
-import * as asymmetric from 'cypherkit2/asymmetric';
+import * as symmetric from 'cipherkit/symmetric';
+import * as asymmetric from 'cipherkit/asymmetric';
 ```
 
 The examples below use these namespaces and top-level `await` in an ES module. Consumers use the published JavaScript and declarations; Bun and TypeScript are development tools only.
@@ -143,7 +143,7 @@ Keys are branded native `CryptoKey` values with runtime checks. When importing a
 `asymmetric.wrapKey()` protects an extractable symmetric key, RSA encryption private key, or Ed25519 signing private key using the recipient's authenticated encryption public key. It returns `EncryptedData` for binary or JWE storage.
 
 ```ts
-import { symmetric, asymmetric, EncryptedData } from 'cypherkit2';
+import { symmetric, asymmetric, EncryptedData } from 'cipherkit';
 
 const key = await symmetric.generateKey();
 const recipient = await asymmetric.generateEncryptionKeyPair();
@@ -214,7 +214,7 @@ Use the text helpers for strings and the byte APIs for `Uint8Array` data:
 `EncryptedData` is available from the package root and both namespace subpaths. Its parsers validate the envelope structure and supported parameters; **only decryption authenticates it**. Conversion does not require keys or repeat encryption. Binary output uses a versioned Cipherkit format with raw ciphertext; JWE output uses standard base64url encoding and adds roughly 33% to ciphertext size. The exact authenticated protected header is preserved in both formats.
 
 ```ts
-import { EncryptedData, symmetric } from 'cypherkit2';
+import { EncryptedData, symmetric } from 'cipherkit';
 
 const encrypted = await symmetric.encrypt(imageBytes, key);
 const binary = encrypted.toBinary(); // Uint8Array
@@ -241,7 +241,7 @@ Retain the decryption key securely. Image filenames and MIME types are not autom
 
 ## Errors
 
-Error classes are exported from the package root and extend `CypherkitError`.
+Error classes are exported from the package root and extend `CipherkitError`.
 
 | Condition | Result |
 | --- | --- |
