@@ -1,6 +1,6 @@
 {
   "name": "cryptical",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "license": "MIT",
   "description": "Portable native Web Crypto encryption and signatures",
   "type": "module",
