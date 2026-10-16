@@ -1,12 +1,12 @@
 import { EncryptedData } from './internal/jwe.js';
-import type { SymmetricKey, WrappableKey, KeyPurpose, KeyForPurpose } from './types.js';
+import type { JsonWebKey, SymmetricKey, WrappableKey, KeyPurpose, KeyForPurpose } from './types.js';
 import { DecryptionError, InvalidArgumentError, InvalidKeyError } from './errors.js';
 import { bytes, utf8, text } from './internal/encoding.js';
 import { checkKey, decryptOperation } from './internal/crypto.js';
 import { contentKey, envelopeArgument, open, parse, seal, sealKey, openKey } from './internal/jwe.js';
 import { passwordOpen, passwordSeal } from './internal/password.js';
 import { exportProtectedBytes, importProtectedBytes, exportJwk, exportProtected, importJwk, importProtected } from './internal/keys.js';
-export type { SymmetricKey, WrappableKey, KeyPurpose, KeyForPurpose } from './types.js';
+export type { JsonWebKey, SymmetricKey, WrappableKey, KeyPurpose, KeyForPurpose } from './types.js';
 export async function generateKey(): Promise<SymmetricKey> { return await contentKey(['encrypt', 'decrypt', 'wrapKey', 'unwrapKey']) as SymmetricKey; }
 export async function encrypt(data: Uint8Array, key: SymmetricKey): Promise<EncryptedData> {
   const copy = bytes(data); checkKey(key, 'symmetric', 'encrypt');
