@@ -1,3 +1,4 @@
+import type { JsonWebKey } from '../types.js';
 import { EncryptedData } from './jwe.js';
 import { CryptoUnavailableError, DecryptionError, InvalidKeyError } from '../errors.js';
 import { checkKey, cryptoProvider, native, random, requireEd25519 } from './crypto.js';

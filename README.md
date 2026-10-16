@@ -1,5 +1,7 @@
 # cryptical
 
+<img src="assets/logo-transparent.png" alt="Cryptical logo" height="150">
+
 A small TypeScript library for encryption and detached signatures using native Web Crypto. It ships ESM JavaScript and TypeScript declarations, has zero runtime dependencies, and uses portable JWK keys and encrypted payloads with binary and standard compact JWE serialization.
 
 All cryptographic functions are asynchronous. Encrypted payload parsing and serialization are synchronous.

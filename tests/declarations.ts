@@ -1,3 +1,4 @@
+import type { JsonWebKey } from 'cryptical';
 // Compile-only declaration consumer. Package self-references resolve published exports.
 import { EncryptedData, asymmetric as a, symmetric as s } from 'cryptical';
 import * as symmetric from 'cryptical/symmetric';
@@ -68,3 +69,19 @@ async function consumer() {
   await a.exportKeyWithPassword(recipient.publicKey, 'password');
 }
 void consumer;
+
+// README key export and password backup example, with intermediate variables.
+async function readmeKeyBackup() {
+  const recipient = await asymmetric.generateEncryptionKeyPair();
+  const password = 'use a randomly generated backup passphrase here';
+  const publicJwk = await asymmetric.exportKey(recipient.publicKey);
+  const importedPublic = await asymmetric.importEncryptionKey(publicJwk);
+  const backup = await asymmetric.exportKeyWithPassword(recipient.privateKey, password);
+  const savedBackup = backup.toJWE();
+  const recoveredPrivate = await asymmetric.importEncryptionKeyWithPassword(
+    asymmetric.EncryptedData.fromJWE(savedBackup), password,
+  );
+  const encrypted = await asymmetric.encryptText('Recovered', importedPublic);
+  console.log(await asymmetric.decryptText(encrypted, recoveredPrivate));
+}
+void readmeKeyBackup;

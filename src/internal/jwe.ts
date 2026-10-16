@@ -1,3 +1,4 @@
+type KeyUsage = CryptoKey['usages'][number];
 import { DecryptionError, EncryptionError, InvalidArgumentError } from '../errors.js';
 import { b64, unb64, utf8, text, concat, MAX_BYTES } from './encoding.js';
 import { cryptoProvider, native, random } from './crypto.js';

@@ -1,5 +1,5 @@
 import { EncryptedData } from './internal/jwe.js';
-import type { WrappableKey, KeyPurpose, KeyForPurpose, EncryptionKeyPair, EncryptionPrivateKey, EncryptionPublicKey, SigningKeyPair, SigningPrivateKey, SigningPublicKey } from './types.js';
+import type { JsonWebKey, WrappableKey, KeyPurpose, KeyForPurpose, EncryptionKeyPair, EncryptionPrivateKey, EncryptionPublicKey, SigningKeyPair, SigningPrivateKey, SigningPublicKey } from './types.js';
 import { DecryptionError, EncryptionError, InvalidArgumentError, InvalidKeyError, SignatureError } from './errors.js';
 import { bytes, b64, unb64, utf8, text } from './internal/encoding.js';
 import { checkKey, cryptoProvider, decryptOperation, native, requireEd25519 } from './internal/crypto.js';

@@ -1,0 +1,8 @@
+{
+  "extends": "./tsconfig.consumer.json",
+  "compilerOptions": {
+    "lib": ["ES2022"],
+    "types": ["node"],
+    "skipLibCheck": false
+  }
+}
