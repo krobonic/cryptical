@@ -1,6 +1,6 @@
 {
   "name": "cryptical",
-  "version": "0.1.1",
+  "version": "0.2.0",
   "license": "MIT",
   "description": "Portable native Web Crypto encryption and signatures",
   "type": "module",
@@ -41,7 +41,7 @@
     "release": "bun publish --access public"
   },
   "devDependencies": {
-    "@types/bun": "1.3.10",
+    "@types/bun": "1.4.3",
     "jose": "6.1.3",
     "playwright": "1.65.0-alpha-2026-10-15",
     "typescript": "7.0.2"

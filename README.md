@@ -118,7 +118,7 @@ const recipient = await asymmetric.generateEncryptionKeyPair();
 const password = 'use a randomly generated backup passphrase here';
 
 const publicJwk = await asymmetric.exportKey(recipient.publicKey);
-const importedPublic = await asymmetric.importEncryptionKey(publicJwk);
+const importedPublic = await asymmetric.importEncryptionPublicKey(publicJwk);
 
 const backup = await asymmetric.exportKeyWithPassword(recipient.privateKey, password);
 const savedBackup = backup.toJWE();
@@ -135,10 +135,21 @@ Both namespaces provide `exportKey(key)` and `exportKeyWithPassword(key, passwor
 | Key purpose | Import a JWK | Import a password-protected backup |
 | --- | --- | --- |
 | Symmetric | `symmetric.importKey(jwk)` | `symmetric.importKeyWithPassword(backup, password)` |
-| Recipient encryption | `asymmetric.importEncryptionKey(jwk)` | `asymmetric.importEncryptionKeyWithPassword(backup, password)` |
-| Signing | `asymmetric.importSigningKey(jwk)` | `asymmetric.importSigningKeyWithPassword(backup, password)` |
+| Recipient encryption public key | `asymmetric.importEncryptionPublicKey(jwk)` | — |
+| Recipient encryption key pair | `asymmetric.importEncryptionKeyPair(privateJwk)` | `asymmetric.importEncryptionKeyWithPassword(backup, password)` (private key only) |
+| Signing public key | `asymmetric.importSigningPublicKey(jwk)` | — |
+| Signing key pair | `asymmetric.importSigningKeyPair(privateJwk)` | `asymmetric.importSigningKeyWithPassword(backup, password)` (private key only) |
 
-Keys are branded native `CryptoKey` values with runtime checks. When importing a dynamically loaded asymmetric JWK, narrow the result with `key.type === 'public'` or `key.type === 'private'` before use.
+Keys are branded native `CryptoKey` values with runtime checks. Public-key imports reject private JWKs. Key-pair imports require a private JWK, validate it, and restore both its private key and corresponding public key. Wrong key types raise `InvalidKeyError`. These explicit imports have unambiguous return types even with `JSON.parse()`:
+
+```ts
+const signer = await asymmetric.importSigningKeyPair(JSON.parse(savedPrivateJwk));
+const verifier = await asymmetric.importSigningPublicKey(JSON.parse(savedPublicJwk));
+const signature = await asymmetric.signText('Hello', signer.privateKey);
+console.log(await asymmetric.verifyText('Hello', signature, verifier));
+```
+
+The existing `importSigningKey()` and `importEncryptionKey()` functions remain available when either key type is expected. For dynamically loaded JSON, annotate the parsed value as `JsonWebKey` (exported by `cryptical`) and narrow the imported result with `key.type === 'public'` or `key.type === 'private'` before use. Passing `JSON.parse()` directly to these overloaded functions can incorrectly infer a private key because its return type is `any`.
 
 ### Wrap a key for a recipient
 
