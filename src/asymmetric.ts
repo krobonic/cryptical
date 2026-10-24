@@ -92,6 +92,34 @@ function checkKeyFamily(key: CryptoKey): void {
   if (!key || !key.algorithm) throw new InvalidKeyError('Expected asymmetric key');
   checkKey(key, key.algorithm.name === 'Ed25519' ? 'signing' : 'encryption');
 }
+/** Import a public RSA encryption JWK; private JWKs are rejected. */
+export async function importEncryptionPublicKey(jwk: JsonWebKey): Promise<EncryptionPublicKey> {
+  const key = await importEncryptionKey(jwk);
+  if (key.type !== 'public') throw new InvalidKeyError('Expected public encryption JWK');
+  return key;
+}
+/** Restore an RSA key pair from a validated private JWK. */
+export async function importEncryptionKeyPair(jwk: JsonWebKey): Promise<EncryptionKeyPair> {
+  const privateKey = await importEncryptionKey(jwk);
+  if (privateKey.type !== 'private') throw new InvalidKeyError('Expected private encryption JWK');
+  const { kty, n, e } = await exportKey(privateKey);
+  const publicKey = await importEncryptionPublicKey({ kty, n, e });
+  return { publicKey, privateKey };
+}
+/** Import a public Ed25519 signing JWK; private JWKs are rejected. */
+export async function importSigningPublicKey(jwk: JsonWebKey): Promise<SigningPublicKey> {
+  const key = await importSigningKey(jwk);
+  if (key.type !== 'public') throw new InvalidKeyError('Expected public signing JWK');
+  return key;
+}
+/** Restore an Ed25519 key pair from a validated private JWK. */
+export async function importSigningKeyPair(jwk: JsonWebKey): Promise<SigningKeyPair> {
+  const privateKey = await importSigningKey(jwk);
+  if (privateKey.type !== 'private') throw new InvalidKeyError('Expected private signing JWK');
+  const { kty, crv, x } = await exportKey(privateKey);
+  const publicKey = await importSigningPublicKey({ kty, crv, x });
+  return { publicKey, privateKey };
+}
 export async function importEncryptionKey(jwk: JsonWebKey & { d: string }): Promise<EncryptionPrivateKey>;
 export async function importEncryptionKey(jwk: JsonWebKey & { d?: never }): Promise<EncryptionPublicKey>;
 export async function importEncryptionKey(jwk: JsonWebKey): Promise<EncryptionPublicKey | EncryptionPrivateKey>;

@@ -19,6 +19,20 @@ async function consumer() {
   await a.decryptText(await a.encryptText('text', publicKey), privateKey);
   const dynamic = await a.importEncryptionKey(JSON.parse('{}') as JsonWebKey);
   if (dynamic.type === 'public') await a.encryptText('text', dynamic);
+  // JSON.parse returns any: explicit imports must still infer precise key types.
+  const signingPair = await a.importSigningKeyPair(JSON.parse('{}'));
+  const signingPublic = await asymmetric.importSigningPublicKey(JSON.parse('{}'));
+  const signature = await a.signText('text', signingPair.privateKey);
+  await a.verifyText('text', signature, signingPair.publicKey);
+  await a.verifyText('text', signature, signingPublic);
+  const encryptionPair = await asymmetric.importEncryptionKeyPair(JSON.parse('{}'));
+  const encryptionPublic = await a.importEncryptionPublicKey(JSON.parse('{}'));
+  await a.decryptText(await a.encryptText('text', encryptionPublic), encryptionPair.privateKey);
+  await a.encryptText('text', encryptionPair.publicKey);
+  // @ts-expect-error Explicit public imports cannot sign.
+  await a.signText('text', signingPublic);
+  // @ts-expect-error Explicit public imports cannot decrypt.
+  await a.decryptText(await a.encryptText('text', encryptionPublic), encryptionPublic);
   const wrapped = await asymmetric.wrapKey(key, recipient.publicKey);
   const restored = await a.unwrapKey(wrapped, recipient.privateKey, { purpose: 'symmetric' });
   await s.encryptText('text', restored);
@@ -75,7 +89,7 @@ async function readmeKeyBackup() {
   const recipient = await asymmetric.generateEncryptionKeyPair();
   const password = 'use a randomly generated backup passphrase here';
   const publicJwk = await asymmetric.exportKey(recipient.publicKey);
-  const importedPublic = await asymmetric.importEncryptionKey(publicJwk);
+  const importedPublic = await asymmetric.importEncryptionPublicKey(publicJwk);
   const backup = await asymmetric.exportKeyWithPassword(recipient.privateKey, password);
   const savedBackup = backup.toJWE();
   const recoveredPrivate = await asymmetric.importEncryptionKeyWithPassword(
