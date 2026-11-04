@@ -4,11 +4,11 @@ The library implements a restricted subset of [JWE Compact Serialization (RFC 75
 
 Five dot-separated, canonical unpadded base64url segments: protected header, encrypted key, IV, ciphertext, authentication tag. Only the following suites are accepted:
 
-| alg | enc | Encrypted key |
-| --- | --- | --- |
-| dir | A256GCM | empty |
-| RSA-OAEP-256 | A256GCM | 384 or 512 bytes; must match RSA modulus |
-| PBES2-HS512+A256KW | A256GCM | 40 bytes |
+| alg                | enc     | Encrypted key                            |
+| ------------------ | ------- | ---------------------------------------- |
+| dir                | A256GCM | empty                                    |
+| RSA-OAEP-256       | A256GCM | 384 or 512 bytes; must match RSA modulus |
+| PBES2-HS512+A256KW | A256GCM | 40 bytes                                 |
 
 AES-GCM uses a fresh 12-byte IV, 32-byte content key and 16-byte tag. The original encoded protected header is the authenticated data. Empty plaintext has an empty ciphertext segment and a nonempty authentication tag. The called API determines the expected algorithm.
 
@@ -18,13 +18,13 @@ Password encryption emits `p2c: 220000` and a fresh 32-byte salt input encoded i
 
 Limits, checked before key derivation where applicable:
 
-| Input | Limit |
-| --- | --- |
-| Plaintext or message to sign | 16 MiB |
-| Encoded JWE | 24 MiB |
-| Decoded protected header | 4 KiB |
-| Serialized JWK / protected JWK plaintext | 32 KiB |
-| Password | 1–1024 UTF-8 bytes |
+| Input                                    | Limit              |
+| ---------------------------------------- | ------------------ |
+| Plaintext or message to sign             | 16 MiB             |
+| Encoded JWE                              | 24 MiB             |
+| Decoded protected header                 | 4 KiB              |
+| Serialized JWK / protected JWK plaintext | 32 KiB             |
+| Password                                 | 1–1024 UTF-8 bytes |
 
 JWK imports accept AES-256 (`oct`), RSA 3072/4096 bits with exponent 65537 and full two-prime private parameters, or Ed25519 (`OKP`). RSA integers use canonical unsigned big-endian encodings. Supplied `alg`, `use`, `key_ops`, and `ext` must match the purpose. `key_ops`, if supplied, must exactly match encrypt/decrypt/wrapKey/unwrapKey for symmetric keys, encrypt/wrapKey for RSA public keys or decrypt/unwrapKey for RSA private keys, or sign or verify for Ed25519. Imports are extractable; an explicit `ext: false` is rejected. Ed25519 imports accept compatible `EdDSA` or `Ed25519` algorithm metadata; exports normalize to `EdDSA` and pass only validated material to native import. Public exports have no private fields. Protected JWKs are JSON UTF-8 inside password, recipient, or direct symmetric JWE. Recipient wrapping uses `alg: "RSA-OAEP-256"`, `enc: "A256GCM"`, and `cty: "jwk+json"`; the JWK itself is the encrypted payload. Symmetric wrapping uses `alg: "dir"`, `enc: "A256GCM"`, and `cty: "jwk+json"`, with an empty encrypted-key segment. The 32 KiB protected-payload limit applies to every wrapping mechanism. Symmetric and recipient unwrapping require an explicit expected key purpose and rejects public keys. The existing binary version 1 framing supports these envelopes without a format change.
 
@@ -42,18 +42,18 @@ Native wrapping does **not** mean key material never enters JavaScript. Payload 
 
 Encryption, key wrapping, and protected key exports return `EncryptedData`. `toBinary()` serializes the following custom format; `fromBinary()` parses it. All integers are unsigned, big-endian. Offsets are byte offsets.
 
-| Offset | Length | Field |
-| --- | --- | --- |
-| 0 | 4 | Magic ASCII `CKIT` (`43 4b 49 54` hex) |
-| 4 | 1 | Version, exactly `01` |
-| 5 | 4 | H: encoded protected header length |
-| 9 | 4 | K: wrapped key length |
-| 13 | 4 | C: ciphertext length, excluding tag |
-| 17 | H | Exact original base64url protected header, ASCII bytes |
-| 17 + H | K | Raw wrapped key (empty for `dir`) |
-| 17 + H + K | 12 | Raw IV |
-| 29 + H + K | C | Raw ciphertext |
-| 29 + H + K + C | 16 | Raw authentication tag |
+| Offset         | Length | Field                                                  |
+| -------------- | ------ | ------------------------------------------------------ |
+| 0              | 4      | Magic ASCII `CKIT` (`43 4b 49 54` hex)                 |
+| 4              | 1      | Version, exactly `01`                                  |
+| 5              | 4      | H: encoded protected header length                     |
+| 9              | 4      | K: wrapped key length                                  |
+| 13             | 4      | C: ciphertext length, excluding tag                    |
+| 17             | H      | Exact original base64url protected header, ASCII bytes |
+| 17 + H         | K      | Raw wrapped key (empty for `dir`)                      |
+| 17 + H + K     | 12     | Raw IV                                                 |
+| 29 + H + K     | C      | Raw ciphertext                                         |
+| 29 + H + K + C | 16     | Raw authentication tag                                 |
 
 Total length is `45 + H + K + C` bytes. H is 1–5,462 bytes and must decode to at most 4,096 bytes of valid supported header JSON. K is 0 for `dir`, 40 for PBES2, or 384/512 for RSA. C is at most 16 MiB, or 32 KiB for protected JWKs. Empty plaintext has C=0. The maximum binary length is 16,783,235 bytes. Parsers reject truncation, trailing bytes, invalid lengths, unknown versions, and invalid magic before cryptographic operations. Password work parameters are validated before derivation.
 
@@ -73,11 +73,10 @@ This example uses the independent `jose` package (a development test oracle, not
 import { compactDecrypt, importJWK } from 'jose';
 
 // Password ciphertext or protected key backup:
-const { plaintext, protectedHeader } = await compactDecrypt(
-  savedJwe,
-  new TextEncoder().encode(password),
-  { keyManagementAlgorithms: ['PBES2-HS512+A256KW'], maxPBES2Count: 1000000 },
-);
+const { plaintext, protectedHeader } = await compactDecrypt(savedJwe, new TextEncoder().encode(password), {
+  keyManagementAlgorithms: ['PBES2-HS512+A256KW'],
+  maxPBES2Count: 1000000,
+});
 const decoded = new TextDecoder('utf-8', { fatal: true, ignoreBOM: true }).decode(plaintext);
 if (protectedHeader.cty === 'jwk+json') {
   const recoveredJwk = JSON.parse(decoded);

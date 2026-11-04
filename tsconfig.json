@@ -1,9 +1,16 @@
 {
   "compilerOptions": {
-    "target": "ES2022", "lib": ["ES2022", "DOM"], "module": "ESNext",
-    "moduleResolution": "Bundler", "types": [], "strict": true,
-    "noUncheckedIndexedAccess": true, "noImplicitOverride": true,
-    "verbatimModuleSyntax": true, "skipLibCheck": true, "noEmit": true
+    "target": "ES2022",
+    "lib": ["ES2022", "DOM"],
+    "module": "ESNext",
+    "moduleResolution": "Bundler",
+    "types": [],
+    "strict": true,
+    "noUncheckedIndexedAccess": true,
+    "noImplicitOverride": true,
+    "verbatimModuleSyntax": true,
+    "skipLibCheck": true,
+    "noEmit": true
   },
   "include": ["index.ts", "src/**/*.ts"]
 }

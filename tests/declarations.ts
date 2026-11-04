@@ -9,8 +9,11 @@ async function consumer() {
   const binary: Uint8Array = EncryptedData.fromJWE(encoded).toBinary();
   const fromSymmetric: EncryptedData = symmetric.EncryptedData.fromBinary(binary);
   const fromAsymmetric: EncryptedData = asymmetric.EncryptedData.fromJWE(encoded);
-  void fromSymmetric; void fromAsymmetric;
-  const key = await symmetric.generateKey(), recipient = await a.generateEncryptionKeyPair(), signer = await asymmetric.generateSigningKeyPair();
+  void fromSymmetric;
+  void fromAsymmetric;
+  const key = await symmetric.generateKey(),
+    recipient = await a.generateEncryptionKeyPair(),
+    signer = await asymmetric.generateSigningKeyPair();
   await s.decryptText(await s.encryptText('text', key), key);
   await a.decryptText(await a.encryptText('text', recipient.publicKey), recipient.privateKey);
   await a.verifyText('text', await a.signText('text', signer.privateKey), signer.publicKey);
@@ -36,15 +39,27 @@ async function consumer() {
   const wrapped = await asymmetric.wrapKey(key, recipient.publicKey);
   const restored = await a.unwrapKey(wrapped, recipient.privateKey, { purpose: 'symmetric' });
   await s.encryptText('text', restored);
-  const encryption = await a.unwrapKey(await a.wrapKey(recipient.privateKey, recipient.publicKey), recipient.privateKey, { purpose: 'encryption' });
+  const encryption = await a.unwrapKey(
+    await a.wrapKey(recipient.privateKey, recipient.publicKey),
+    recipient.privateKey,
+    { purpose: 'encryption' },
+  );
   await a.decryptText(await a.encryptText('text', recipient.publicKey), encryption);
-  const signing = await asymmetric.unwrapKey(await a.wrapKey(signer.privateKey, recipient.publicKey), recipient.privateKey, { purpose: 'signing' });
+  const signing = await asymmetric.unwrapKey(
+    await a.wrapKey(signer.privateKey, recipient.publicKey),
+    recipient.privateKey,
+    { purpose: 'signing' },
+  );
   await a.signText('text', signing);
   const symmetricWrapped = await symmetric.wrapKey(key, key);
   await s.encryptText('text', await s.unwrapKey(symmetricWrapped, key, { purpose: 'symmetric' }));
-  const symmetricEncryption = await s.unwrapKey(await s.wrapKey(recipient.privateKey, key), key, { purpose: 'encryption' });
+  const symmetricEncryption = await s.unwrapKey(await s.wrapKey(recipient.privateKey, key), key, {
+    purpose: 'encryption',
+  });
   await a.decrypt(wrapped, symmetricEncryption);
-  const symmetricSigning = await symmetric.unwrapKey(await s.wrapKey(signer.privateKey, key), key, { purpose: 'signing' });
+  const symmetricSigning = await symmetric.unwrapKey(await s.wrapKey(signer.privateKey, key), key, {
+    purpose: 'signing',
+  });
   await a.signText('text', symmetricSigning);
   // @ts-expect-error Public payload keys cannot be wrapped.
   await s.wrapKey(recipient.publicKey, key);
@@ -93,7 +108,8 @@ async function readmeKeyBackup() {
   const backup = await asymmetric.exportKeyWithPassword(recipient.privateKey, password);
   const savedBackup = backup.toJWE();
   const recoveredPrivate = await asymmetric.importEncryptionKeyWithPassword(
-    asymmetric.EncryptedData.fromJWE(savedBackup), password,
+    asymmetric.EncryptedData.fromJWE(savedBackup),
+    password,
   );
   const encrypted = await asymmetric.encryptText('Recovered', importedPublic);
   console.log(await asymmetric.decryptText(encrypted, recoveredPrivate));

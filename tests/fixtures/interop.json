@@ -13,12 +13,7 @@
       "alg": "A256GCM",
       "ext": true,
       "k": "7JNcOKZkhfEaKdjeREgHt6rS27i6drIHlapQjwz-zxY",
-      "key_ops": [
-        "encrypt",
-        "decrypt",
-        "wrapKey",
-        "unwrapKey"
-      ],
+      "key_ops": ["encrypt", "decrypt", "wrapKey", "unwrapKey"],
       "kty": "oct"
     },
     "rsa": {
@@ -28,10 +23,7 @@
       "dq": "oZNbiMvr2VqplK_X8zmutBsLU9hcDbfAA_7mddUmOlWE_AbZZN6hX84KpoXhA8rw2AhWX-o-g9a4GERI8IfU_lixkUDNlemlj4Es5xQ18GGQj5StdlOho1852CReTmKZ2q_0xxGAjPMOT_bcdWQKg1RQNuXFzu6K8RIHNzl393ftDk2mLA2FEBTp_yxiV0h0l0k2WdEJOlblLB7lJ0lk-0Hz6BCGq_EuG_ADAo_tOX2LCSJKs7mS2WWFRfBSkjQZ",
       "e": "AQAB",
       "ext": true,
-      "key_ops": [
-        "decrypt",
-        "unwrapKey"
-      ],
+      "key_ops": ["decrypt", "unwrapKey"],
       "kty": "RSA",
       "n": "sSxbVyOqv-HeswY-OHZ76odP7LP7jERgNZtnpfcckG8voldFpa_XSMWkT4vSS17Y2ORnRvZkjBaiEaVDPOkReIBRVrAPP0GJZ7Qd5qwcNfhJGS2zwa4AOD1EmvoOUSuCzsl9cI8mvixLKENkJrES9MwfPwoZePQ0FPD24EVXrT2J9XNvNENjngGIvZg3lFNXbLsiaz37PJ9mzCTUlZ8ZN8IvA0XMw89dZ5j6nGsqj8g9qIYRFeuh0jrRKWCWYQ8hVb0CtDaqL3uAnsdgCKmjuvmjjNimx9WjWiNkH3iD_0H571Iv67UJ2QU0nhKbQ2MOoHC0bnhtLpa8NzIRklo36GYmwH-1YikRCeLAvTUB26s8P6D4Ep6aANO04sbiHa9e32x_fNei0KhPiE3sl2NrHSgwomb3vfid7xYypCQz4SHK03CGYZ_VUvpzXIHag4zAc3iZiTlKS1Yh09ffo5ikQrNlqMJy49lBt70bnWQj63XI-e71kJUReONGiKZhsfD7",
       "p": "20lVdaTZAzdXiIY8dEiJ7UoO4_igN7WlrSbYyA_qjHMxfrDLJKvcnopxGLPRIcH3PM9m2WEbAqxlqPt9NpOmRQY2K-4Vgcb5WVPKykDYHbIaP1V8F_jmsvdlrQcTqMF-Px-H3AS-LNYietRS0Z8apOUbH-ySwCy2g6WG7CXd52rTL_V-ZoGODtH_i2lpvjkdkpXHYX62s7ZR7z_8kwrBrGiNtYubgFray-otQsb_Qf4rv8Sz75_1oFglAA1-Q54B",

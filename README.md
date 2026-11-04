@@ -22,12 +22,12 @@ All cryptographic functions are asynchronous. Encrypted payload parsing and seri
 
 ## Choose an operation
 
-| Goal | API | What to retain |
-| --- | --- | --- |
-| Encrypt with a password | `symmetric.encryptTextWithPassword` | Ciphertext and password |
-| Encrypt with a generated shared key | `symmetric.encryptText` | Ciphertext and symmetric key |
-| Encrypt for one recipient | `asymmetric.encryptText` | Ciphertext; the recipient keeps their private key |
-| Sign a message | `asymmetric.signText` | Exact message, detached signature, and authenticated public signing key |
+| Goal                                | API                                 | What to retain                                                          |
+| ----------------------------------- | ----------------------------------- | ----------------------------------------------------------------------- |
+| Encrypt with a password             | `symmetric.encryptTextWithPassword` | Ciphertext and password                                                 |
+| Encrypt with a generated shared key | `symmetric.encryptText`             | Ciphertext and symmetric key                                            |
+| Encrypt for one recipient           | `asymmetric.encryptText`            | Ciphertext; the recipient keeps their private key                       |
+| Sign a message                      | `asymmetric.signText`               | Exact message, detached signature, and authenticated public signing key |
 
 Encryption returns an immutable `EncryptedData` object. Save its **entire binary envelope** with `.toBinary()` or its **entire JWE string** with `.toJWE()` to decrypt later. There is no recovery without the correct key or password.
 
@@ -123,7 +123,8 @@ const importedPublic = await asymmetric.importEncryptionPublicKey(publicJwk);
 const backup = await asymmetric.exportKeyWithPassword(recipient.privateKey, password);
 const savedBackup = backup.toJWE();
 const recoveredPrivate = await asymmetric.importEncryptionKeyWithPassword(
-  asymmetric.EncryptedData.fromJWE(savedBackup), password,
+  asymmetric.EncryptedData.fromJWE(savedBackup),
+  password,
 );
 
 const encrypted = await asymmetric.encryptText('Recovered', importedPublic);
@@ -132,13 +133,13 @@ console.log(await asymmetric.decryptText(encrypted, recoveredPrivate)); // Recov
 
 Both namespaces provide `exportKey(key)` and `exportKeyWithPassword(key, password)`. Choose the matching import function:
 
-| Key purpose | Import a JWK | Import a password-protected backup |
-| --- | --- | --- |
-| Symmetric | `symmetric.importKey(jwk)` | `symmetric.importKeyWithPassword(backup, password)` |
-| Recipient encryption public key | `asymmetric.importEncryptionPublicKey(jwk)` | — |
-| Recipient encryption key pair | `asymmetric.importEncryptionKeyPair(privateJwk)` | `asymmetric.importEncryptionKeyWithPassword(backup, password)` (private key only) |
-| Signing public key | `asymmetric.importSigningPublicKey(jwk)` | — |
-| Signing key pair | `asymmetric.importSigningKeyPair(privateJwk)` | `asymmetric.importSigningKeyWithPassword(backup, password)` (private key only) |
+| Key purpose                     | Import a JWK                                     | Import a password-protected backup                                                |
+| ------------------------------- | ------------------------------------------------ | --------------------------------------------------------------------------------- |
+| Symmetric                       | `symmetric.importKey(jwk)`                       | `symmetric.importKeyWithPassword(backup, password)`                               |
+| Recipient encryption public key | `asymmetric.importEncryptionPublicKey(jwk)`      | —                                                                                 |
+| Recipient encryption key pair   | `asymmetric.importEncryptionKeyPair(privateJwk)` | `asymmetric.importEncryptionKeyWithPassword(backup, password)` (private key only) |
+| Signing public key              | `asymmetric.importSigningPublicKey(jwk)`         | —                                                                                 |
+| Signing key pair                | `asymmetric.importSigningKeyPair(privateJwk)`    | `asymmetric.importSigningKeyWithPassword(backup, password)` (private key only)    |
 
 Keys are branded native `CryptoKey` values with runtime checks. Public-key imports reject private JWKs. Key-pair imports require a private JWK, validate it, and restore both its private key and corresponding public key. Wrong key types raise `InvalidKeyError`. These explicit imports have unambiguous return types even with `JSON.parse()`:
 
@@ -163,20 +164,18 @@ const recipient = await asymmetric.generateEncryptionKeyPair();
 const wrapped = await asymmetric.wrapKey(key, recipient.publicKey);
 const saved = wrapped.toBinary(); // Or wrapped.toJWE()
 
-const restored = await asymmetric.unwrapKey(
-  EncryptedData.fromBinary(saved),
-  recipient.privateKey,
-  { purpose: 'symmetric' },
-); // SymmetricKey
+const restored = await asymmetric.unwrapKey(EncryptedData.fromBinary(saved), recipient.privateKey, {
+  purpose: 'symmetric',
+}); // SymmetricKey
 ```
 
 The required `purpose` determines both runtime validation and the TypeScript return type:
 
-| Purpose | Returned key |
-| --- | --- |
-| `symmetric` | `SymmetricKey` (AES-256-GCM) |
+| Purpose      | Returned key                      |
+| ------------ | --------------------------------- |
+| `symmetric`  | `SymmetricKey` (AES-256-GCM)      |
 | `encryption` | `EncryptionPrivateKey` (RSA-OAEP) |
-| `signing` | `SigningPrivateKey` (Ed25519) |
+| `signing`    | `SigningPrivateKey` (Ed25519)     |
 
 Private keys use the same calls: pass the private key to `wrapKey()` and its purpose to `unwrapKey()`. Public keys use ordinary JWK export. Nonextractable keys cannot be wrapped. Restored keys are extractable, following the existing import policy.
 
@@ -193,11 +192,9 @@ const wrappingKey = await symmetric.generateKey();
 const key = await symmetric.generateKey();
 const wrapped = await symmetric.wrapKey(key, wrappingKey);
 
-const restored = await symmetric.unwrapKey(
-  symmetric.EncryptedData.fromBinary(wrapped.toBinary()),
-  wrappingKey,
-  { purpose: 'symmetric' },
-);
+const restored = await symmetric.unwrapKey(symmetric.EncryptedData.fromBinary(wrapped.toBinary()), wrappingKey, {
+  purpose: 'symmetric',
+});
 ```
 
 Use `purpose: 'encryption'` for an RSA private key or `'signing'` for an Ed25519 private key. Wrapped results also support `.toJWE()`. The payload key must be extractable; the wrapping key can be nonextractable and must permit `wrapKey` for wrapping or `unwrapKey` for unwrapping. Restored keys follow the existing extractable-key import policy.
@@ -208,14 +205,14 @@ This uses an AES-GCM envelope with `alg: "dir"` and authenticated `cty: "jwk+jso
 
 Use the text helpers for strings and the byte APIs for `Uint8Array` data:
 
-| Operation | Text API | Byte API |
-| --- | --- | --- |
-| Encrypt with a key, in either namespace | `encryptText(text, key)` | `encrypt(data, key)` |
-| Decrypt with a key, in either namespace | `decryptText(encrypted, key)` | `decrypt(encrypted, key)` |
-| Encrypt with a password, in `symmetric` | `encryptTextWithPassword(text, password)` | `encryptWithPassword(data, password)` |
+| Operation                               | Text API                                       | Byte API                                   |
+| --------------------------------------- | ---------------------------------------------- | ------------------------------------------ |
+| Encrypt with a key, in either namespace | `encryptText(text, key)`                       | `encrypt(data, key)`                       |
+| Decrypt with a key, in either namespace | `decryptText(encrypted, key)`                  | `decrypt(encrypted, key)`                  |
+| Encrypt with a password, in `symmetric` | `encryptTextWithPassword(text, password)`      | `encryptWithPassword(data, password)`      |
 | Decrypt with a password, in `symmetric` | `decryptTextWithPassword(encrypted, password)` | `decryptWithPassword(encrypted, password)` |
-| Sign, in `asymmetric` | `signText(text, privateKey)` | `sign(data, privateKey)` |
-| Verify, in `asymmetric` | `verifyText(text, signature, publicKey)` | `verify(data, signature, publicKey)` |
+| Sign, in `asymmetric`                   | `signText(text, privateKey)`                   | `sign(data, privateKey)`                   |
+| Verify, in `asymmetric`                 | `verifyText(text, signature, publicKey)`       | `verify(data, signature, publicKey)`       |
 
 - Encryption always returns `EncryptedData`; decryption accepts that object. Parse stored data with `EncryptedData.fromBinary(bytes)` or `EncryptedData.fromJWE(string)` first. Text decryption returns a string; byte decryption returns `Uint8Array`.
 - Text signatures are unpadded base64url strings. Byte signatures are 64-byte Ed25519 signatures as `Uint8Array`. Verification returns a boolean.
@@ -231,7 +228,7 @@ import { EncryptedData, symmetric } from 'cryptical';
 
 const encrypted = await symmetric.encrypt(imageBytes, key);
 const binary = encrypted.toBinary(); // Uint8Array
-const jwe = encrypted.toJWE();       // compact JWE string
+const jwe = encrypted.toJWE(); // compact JWE string
 
 // uploadUrl and downloadUrl are authorised object-storage URLs.
 const upload = await fetch(uploadUrl, {
@@ -256,14 +253,14 @@ Retain the decryption key securely. Image filenames and MIME types are not autom
 
 Error classes are exported from the package root and extend `CrypticalError`.
 
-| Condition | Result |
-| --- | --- |
-| Invalid or malformed signature | Verification returns `false` |
-| Wrong argument type | `InvalidArgumentError` |
-| Invalid key or key purpose | `InvalidKeyError` |
-| Required native algorithm unavailable | `CryptoUnavailableError` |
-| Wrong secret, malformed ciphertext, or authentication failure | `DecryptionError` |
-| Other encryption or signing/verification operation failure | `EncryptionError` or `SignatureError` |
+| Condition                                                     | Result                                |
+| ------------------------------------------------------------- | ------------------------------------- |
+| Invalid or malformed signature                                | Verification returns `false`          |
+| Wrong argument type                                           | `InvalidArgumentError`                |
+| Invalid key or key purpose                                    | `InvalidKeyError`                     |
+| Required native algorithm unavailable                         | `CryptoUnavailableError`              |
+| Wrong secret, malformed ciphertext, or authentication failure | `DecryptionError`                     |
+| Other encryption or signing/verification operation failure    | `EncryptionError` or `SignatureError` |
 
 Decryption failures deliberately share the same error. Never use error timing as a secret-validation oracle.
 
@@ -279,12 +276,12 @@ See the [verification record and remaining release gates](docs/security.md#local
 
 ## Algorithms and limits
 
-| Operation | Algorithm |
-| --- | --- |
-| Content encryption | AES-256-GCM with random 96-bit IVs |
-| Password encryption | PBES2-HS512+A256KW with 220,000 PBKDF2 iterations |
+| Operation            | Algorithm                                                                 |
+| -------------------- | ------------------------------------------------------------------------- |
+| Content encryption   | AES-256-GCM with random 96-bit IVs                                        |
+| Password encryption  | PBES2-HS512+A256KW with 220,000 PBKDF2 iterations                         |
 | Recipient encryption | RSA-OAEP-256 with generated 3072-bit RSA keys and a fresh AES content key |
-| Detached signatures | Ed25519 |
+| Detached signatures  | Ed25519                                                                   |
 
 Identical plaintexts produce different ciphertexts. There are no algorithm, IV, salt, or iteration options.
 

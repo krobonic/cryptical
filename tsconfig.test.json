@@ -1,18 +1,9 @@
 {
   "extends": "./tsconfig.json",
   "compilerOptions": {
-    "types": [
-      "bun"
-    ],
+    "types": ["bun"],
     "allowImportingTsExtensions": true
   },
-  "include": [
-    "index.ts",
-    "src/**/*.ts",
-    "scripts/**/*.ts",
-    "tests/**/*.ts"
-  ],
-  "exclude": [
-    "tests/declarations.ts"
-  ]
+  "include": ["index.ts", "src/**/*.ts", "scripts/**/*.ts", "tests/**/*.ts"],
+  "exclude": ["tests/declarations.ts"]
 }

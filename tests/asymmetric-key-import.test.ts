@@ -37,6 +37,8 @@ test('explicit encryption imports restore JSON keys with usable public and priva
   await expect(a.importSigningPublicKey(publicJwk)).rejects.toBeInstanceOf(InvalidKeyError);
   await expect(a.importSigningKeyPair(privateJwk)).rejects.toBeInstanceOf(InvalidKeyError);
   const signer = await a.generateSigningKeyPair();
-  await expect(a.importEncryptionPublicKey(await a.exportKey(signer.publicKey))).rejects.toBeInstanceOf(InvalidKeyError);
+  await expect(a.importEncryptionPublicKey(await a.exportKey(signer.publicKey))).rejects.toBeInstanceOf(
+    InvalidKeyError,
+  );
   await expect(a.importEncryptionKeyPair(await a.exportKey(signer.privateKey))).rejects.toBeInstanceOf(InvalidKeyError);
 });
